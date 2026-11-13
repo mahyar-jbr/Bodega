@@ -1,0 +1,5 @@
+[
+  { "code": "WELCOME10", "pct": 10, "active": true },
+  { "code": "TORONTO5", "pct": 5, "active": true },
+  { "code": "SUMMER20", "pct": 20, "active": false }
+]

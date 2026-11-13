@@ -1,0 +1,14 @@
+[
+  { "sku": "coffee", "name": "Large coffee", "price": 3.25, "cost": 0.70, "emoji": "☕", "stock": 100 },
+  { "sku": "patty", "name": "Beef patty", "price": 3.75, "cost": 1.40, "emoji": "🥟", "stock": 60 },
+  { "sku": "buttertart", "name": "Butter tart", "price": 3.50, "cost": 1.20, "emoji": "🥧", "stock": 40 },
+  { "sku": "peameal", "name": "Peameal bacon sandwich", "price": 9.50, "cost": 3.90, "emoji": "🥪", "stock": 25 },
+  { "sku": "chips", "name": "Ketchup chips", "price": 2.75, "cost": 1.05, "emoji": "🍟", "stock": 80 },
+  { "sku": "nanaimo", "name": "Nanaimo bar", "price": 3.75, "cost": 1.30, "emoji": "🍫", "stock": 40 },
+  { "sku": "icedtea", "name": "Iced tea", "price": 2.50, "cost": 0.75, "emoji": "🧋", "stock": 80 },
+  { "sku": "maplecookies", "name": "Maple cookies", "price": 4.25, "cost": 1.60, "emoji": "🍁", "stock": 40 },
+  { "sku": "umbrella", "name": "Compact umbrella", "price": 14.00, "cost": 6.50, "emoji": "☂️", "stock": 15 },
+  { "sku": "toque", "name": "Bodega toque", "price": 18.00, "cost": 8.00, "emoji": "🧢", "stock": 20 },
+  { "sku": "hoodie", "name": "Limited Bodega hoodie", "price": 19.00, "cost": 9.50, "emoji": "🧥", "stock": 10 },
+  { "sku": "console", "name": "Game console (limited)", "price": 549.00, "cost": 470.00, "emoji": "🎮", "stock": 2 }
+]

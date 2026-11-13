@@ -1,0 +1,10 @@
+[
+  { "memberId": "BDG-1001", "name": "Aisha Rahman", "tier": "gold", "pct": 10 },
+  { "memberId": "BDG-1002", "name": "Daniel Okafor", "tier": "silver", "pct": 5 },
+  { "memberId": "BDG-1003", "name": "Priya Nair", "tier": "gold", "pct": 10 },
+  { "memberId": "BDG-1004", "name": "Marco Rossi", "tier": "silver", "pct": 5 },
+  { "memberId": "BDG-1005", "name": "Jenny Liu", "tier": "gold", "pct": 10 },
+  { "memberId": "BDG-1006", "name": "Omar Haddad", "tier": "silver", "pct": 5 },
+  { "memberId": "BDG-1007", "name": "Sofia Petrov", "tier": "gold", "pct": 10 },
+  { "memberId": "BDG-1008", "name": "Ethan Clarke", "tier": "silver", "pct": 5 }
+]
