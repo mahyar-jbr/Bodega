@@ -11,6 +11,13 @@ Bodega's shared backlog: every task from now through submission on Sat Nov 14, f
 - The flash sale is now a stretch goal.
 - We enter problem statement 2, "Memory You Can Govern".
 
+**Nov 13 update.** Only the two of us touch the live app during the demo. There are no QR codes and no sign-ups from the room, and the judges watch. The presenting laptop shows the big screen with a phone-size shop window beside it, Kasra sends rehearsed cons from that window, and the 15:45 recording is the fallback. So:
+- M4-11 (the round's QR codes) is dropped, and M4-04 has no QR codes.
+- The ops console has no round or mode switch (M3-09).
+- The guard has no profanity filter (M2-02), and the phone shop has no per-IP sign-up limit.
+- An audit-trail panel joins the stretch goals (X4).
+- The milestones don't move. The freed time is buffer, and if M3 is green early, one unrecorded dry run of the demo.
+
 - **How to use it on Saturday:** each lane works down its column of the run sheet, in order. The tables after it define each task.
 - **Owner and lane:** Mahyar, Kasra or both.
   - Mahyar's **tab 1** does the agent logic. **Tab 2** (from 11:10) does the facts and valid basis, the evaluation runner, the auditor and the big screen. The **helper** is a Claude tab on Mahyar's second computer: it sees only pushed code, and if it's away, tab 2 takes its tasks.
@@ -20,7 +27,7 @@ Bodega's shared backlog: every task from now through submission on Sat Nov 14, f
 - **Target:** the prep day, or the time on Saturday the task should be done by.
 - **AI budget:** our Anthropic credit is fixed, with auto-reload off (decided Nov 10). Develop on the dev set. The held-out set runs only for the v0 baselines and real gate runs, the gate demo is pressed once at the recorded run, and the crowd bot runs only when needed. Mahyar checks the balance at 13:30, 15:30 and 16:15; if it runs low, everything that isn't for judging stops.
 - **Cuts:** **Cut 1** to **Cut 4** mark what goes first if we fall behind (section 9).
-- **Saturday's buffers:** lunch (13:00) is eaten at the desk, during M2. The slack before each milestone is its check window (M1 15 minutes, M2 10, M3 15), and 15:25 to 15:45 is free before the recorded run.
+- **Saturday's buffers:** lunch (13:00) is eaten at the desk, during M2. The slack before each milestone is its check window (M1 15 minutes, M2 10, M3 15), and 15:25 to 15:45 is free before the recorded run (with M3 green early, an unrecorded dry run of the demo goes there).
 
 ## Run sheet (Saturday)
 
@@ -41,7 +48,7 @@ Each time is when the task should be done. Bold rows are shared checks. Before 1
 | 12:05 | | | M1-06 AtlasStore | |
 | 12:10 | M1-02 v0 shopkeeper | M3-01 eval runner | | |
 | 12:15 | | | M1-07 contract tests on AtlasStore | |
-| 12:25 | M1-03 handleMessage | | | M4-04 three stores' look and QR codes |
+| 12:25 | M1-03 handleMessage | | | M4-04 three stores' look |
 | **12:40** | **M1-09 M1 check (both)** | | | |
 | 12:50 | | M2-07 big screen v1 | | |
 | 12:55 | | | M2-03 change bus | |
@@ -62,7 +69,6 @@ Each time is when the task should be done. Bold rows are shared checks. Before 1
 | 15:10 | M3-11 gate demo | | | |
 | 15:20 | | M4-03 immunity, forget and numbers | | |
 | **15:25** | **M3-10 M3 check** | | | |
-| 15:30 | | M4-11 the round's QR codes | | |
 | 15:45 | Free: fixes and help | M4-07 memory panel (M4-08 only if time is left) | Free: fixes and help (M4-05 only if all green at 15:00) | Free: phone polish and help |
 | **16:00** | **M4-10 recorded run (both)** | | | |
 | **16:15** | **F02 fixes from the run; F03 code freeze (both)** | | | |
@@ -119,7 +125,7 @@ The store runtimes, rollback and reset (M4-02, M2-11, M4-12) are built in this w
 | ID | Task | Area | Owner | State | Milestone | Depends on | Target |
 |---|---|---|---|---|---|---|---|
 | M2-01 | Facts and the valid-basis check pass tests built from data/README.md's rules. A refund on an order from the same conversation counts as a discount and needs a valid discount basis, unless it cancels the whole order (tab 2, first thing) | guard | Mahyar | Not started | M2 | S05 | 11:35 |
-| M2-02 | The guard checks every money call against the store's version (no rules at v0), with the profanity filter. A failed discount rule caps the discount at the valid percentage and the sale goes ahead; other failed rules block (tab 1) | guard | Mahyar | Not started | M2 | M2-01, M1-03 | 13:00 |
+| M2-02 | The guard checks every money call against the store's version (no rules at v0), A failed discount rule caps the discount at the valid percentage and the sale goes ahead; other failed rules block (tab 1) | guard | Mahyar | Not started | M2 | M2-01, M1-03 | 13:00 |
 | M2-03 | The change bus delivers changes from one change stream and survives a reconnect (Kasra A) | realtime | Kasra | Not started | M2 | M1-06, S09 | 12:55 |
 | M2-04 | SSE streams the four topics, and /api/agent/state and /api/agent/metrics answer (Kasra A) | realtime | Kasra | Not started | M2 | M2-03 | 13:25 |
 | M2-05 | The auditor turns each loss with no valid basis (M2-01's check, same-conversation refunds included) into an incident with a Haiku summary and an attack metric, and agent.metrics() reports them. The time-series collection is created at startup (tab 2; tested directly until the change bus lands) | auditor | Mahyar | Not started | M2 | M2-01, M2-03 | 13:15 |
@@ -144,7 +150,7 @@ The store runtimes, rollback and reset (M4-02, M2-11, M4-12) are built in this w
 | M3-06 | The gate scores a candidate on held-out, then promotes it in one transaction or rejects it with reasons, with one retry (tab 1) | held-out gate | Mahyar | Not started | M3 | M3-01, M3-04, M3-05 | 15:05 |
 | M3-07 | `npm run compare` prints v0 against the newest version, per category, with both runs' settings hash, which must match (tab 2: v0's two baselines first, the newest version once M3-06 lands) | held-out gate | Mahyar | Not started | M3 | M3-03 | 14:15 |
 | M3-08 | Reset deletes the crowd's shoppers, orders, ledger and bot runs, restocks the shelves, keeps codes, members and stores, and calls agent.reset() (Kasra A) | data and money | Kasra | Not started | M3 | M1-06, M4-12 | 14:15 |
-| M3-09 | The ops console runs reset, rounds, mode, learning, evaluations and bots behind the password, and shows agent.state(), including whether learning is paused. Three more buttons: Opening (M2-08's opening mode), Test a strict version (agent.gateDemo, POST /api/ops/gate-demo) and Roll back (agent.rollback, POST /api/ops/rollback) (Kasra B) | ops console | Kasra | Not started | M3 | M2-04, M2-08, M3-08 | 14:30 |
+| M3-09 | The ops console runs reset, learning, evaluations and bots behind the password (no round or mode switch since Nov 13), and shows agent.state(), including whether learning is paused. Three more buttons: Opening (M2-08's opening mode), Test a strict version (agent.gateDemo, POST /api/ops/gate-demo) and Roll back (agent.rollback, POST /api/ops/rollback) (Kasra B) | ops console | Kasra | Not started | M3 | M2-04, M2-08, M3-08 | 14:30 |
 | M3-10 | **M3 check** on the deployed app: crowd cons trigger learn, gate and promote; every store turns immune; then Roll back, and every store forgets | demo | Mahyar | Not started | M3 | M2-08, M2-11, M3-06, M3-07, M3-09 | 15:25 |
 | M3-11 | agent.gateDemo() sends a hand-written, deliberately too-strict version (labeled "test version, not learned") through the same held-out gate, so the screen shows a rejection and its reason. About $3 a press: press it once at the recorded run (M4-10), and at the judging tables show that stored rejection unless a judge asks for a live one (tab 1) | held-out gate | Mahyar | Not started | M3 | M3-06 | 15:10 |
 
@@ -156,11 +162,10 @@ M4-02 and M4-12 moved up to section 4; M4-05 and M4-09 (the flash sale) are now 
 |---|---|---|---|---|---|---|---|
 | M4-01 | The learning panel shows the cons it remembered, the new rules, the evaluation's progress, the verdict, and "same model, same prompt" with the settings hash (tab 2) | big screen | Mahyar | Not started | M4 | M2-07, M3-01 | 14:50 |
 | M4-03 | The screen shows each store's time to immunity and, after a rollback, its time to forget and that learning is paused; the money blocked; and the before and after numbers (tab 2) | big screen | Mahyar | Not started | M4 | M2-11, M3-07, M4-01, M4-02 | 15:20 |
-| M4-04 | The three stores have names, colors, awnings and QR codes (Kasra B, right after the phone shop). **Cut 4** drops Scarborough | phone shop | Kasra | Not started | M4 | M1-08 | 12:25 |
+| M4-04 | The three stores have names, colors and awnings, and no QR codes since Nov 13 (Kasra B, right after the phone shop). **Cut 4** drops Scarborough | phone shop | Kasra | Not started | M4 | M1-08 | 12:25 |
 | M4-07 | The memory panel: each con's summary, first store and covering version, under three lines of memory rules (raw chats expire in 24 hours and never leave their store; only rules proven on the held-out set are shared; any rule can be rolled back) (tab 2). **Cut 3** keeps only the three lines | big screen | Mahyar | Not started | M4 | M2-06, M4-03 | 15:45 |
 | M4-08 | **Cut 2.** The version chart shows scam success and honest service across versions (tab 2, only if time is left before the run) | big screen | Mahyar | Not started | M4 | M3-06, M4-03 | 15:45 |
-| M4-10 | **M4 check, recorded:** rounds 1 and 2 and the rollback, run with the dev set from a reset; every store turns immune live, then forgets. Press the gate demo once. Record the screen and both phones during this run: that footage is the video's (F04) and the backup (F05) | demo | both | Not started | M4 | M3-09, M3-10, M3-11, M4-03, M4-04, M4-07, M4-11, M4-12 | 16:00 |
-| M4-11 | The big screen shows the round's QR codes: Queen's in round 1, Yonge's and Scarborough's in round 2 (tab 2). **Cut 4** drops Scarborough's | big screen | Mahyar | Not started | M4 | M2-07, M3-09, M4-04 | 15:30 |
+| M4-10 | **M4 check, recorded:** the demo exactly as on stage, driven only by us from a reset: the opening, Kasra's con in the shop window beside the big screen, every store immune live, the reworded con refused at Yonge, the coffee served at Scarborough, then Roll back and every store forgets. Press the gate demo once. Record the presenting laptop's screen and Mahyar's phone: that footage is the video's (F04) and the backup (F05) | demo | both | Not started | M4 | M3-09, M3-10, M3-11, M4-03, M4-04, M4-07, M4-12 | 16:00 |
 
 ## 7. Freeze and submit
 
@@ -172,7 +177,7 @@ M4-02 and M4-12 moved up to section 4; M4-05 and M4-09 (the flash sale) are now 
 | F04 | The 1-minute video is cut from the recorded run's footage, with Mahyar's voiceover, and uploaded | submission | both | Not started | submit | M4-10 | 16:40 |
 | F05 | The recorded run's screen recording is the backup; re-record after F03 only if the build changed | demo | Kasra | Not started | submit | M4-10 | 16:40 |
 | F06 | Submitted by 16:50 (the deadline is 17:00): the public repo checked for personal files and secrets, the `pre-event` tag and the README's "Built at the event" section in place, live link, description, video, problem statement 2 chosen if the form asks, and both of us added on the submission page | submission | Mahyar | Not started | submit | F01, F04 | 16:50 |
-| F07 | The 3-minute demo is rehearsed twice, plus the 90-second version, before round 1 judging starts at 17:15 | demo | both | Not started | submit | F06 | 17:10 |
+| F07 | The 3-minute demo, driven only by us, is rehearsed twice, plus the 90-second version, before round 1 judging starts at 17:15 | demo | both | Not started | submit | F06 | 17:10 |
 | F08 | The Render service is deleted after judging | deploy | Mahyar | Not started | submit | F06 | After judging |
 
 ## 8. Stretch (only if everything is green at 15:00)
@@ -182,6 +187,7 @@ M4-02 and M4-12 moved up to section 4; M4-05 and M4-09 (the flash sale) are now 
 | X1 | **Cut 1.** S1: a store goes offline, a new con is learned, and the store comes back and catches up live | rollout | both | Not started | stretch | M3-09, M4-02 | Before 15:45 |
 | X2 | **Cut 1.** S2: a voice hotline with ElevenLabs. It needs an ElevenLabs key, which prep doesn't set up | shopkeeper | Mahyar | Not started | stretch | M3-10 | Before 15:45 |
 | X3 | **Cut 1.** S3: Atlas agent memory for regular customers | con memory | Mahyar | Not started | stretch | M3-10 | Before 15:45 |
+| X4 | **Cut 1.** S4: an audit-trail panel for one con: its summary, ledger entries, incident and the version that blocks it (tab 2) | big screen | Mahyar | Not started | stretch | M3-10, M4-07 | Before 15:45 |
 | M4-05 | **Cut 1** (a stretch goal since Nov 11). Flash sale: it first restocks the limited hoodie to 10 at its store (round 1 may have sold some), then 100 buyers race for them; exactly 10 sell, and the consistency checks pass (Kasra A) | bots | Kasra | Not started | stretch | M1-06, M3-09 | Before 15:45 |
 | M4-09 | **Cut 1.** The flash sale result shows on the big screen (tab 2), only with M4-05 | big screen | Mahyar | Not started | stretch | M4-05 | Before 15:45 |
 
@@ -189,10 +195,10 @@ M4-02 and M4-12 moved up to section 4; M4-05 and M4-09 (the flash sale) are now 
 
 | Cut | What goes | Tasks |
 |---|---|---|
-| 1 | Stretch goals, the flash sale included | X1, X2, X3, M4-05, M4-09 |
+| 1 | Stretch goals, the flash sale included | X1, X2, X3, X4, M4-05, M4-09 |
 | 2 | The version chart (the before and after numbers in M4-03 stay) | M4-08 |
 | 3 | The memory panel's con cards (its three lines of memory rules stay) | M4-07 |
-| 4 | The third store; two stores still show immunity | Scarborough's part of M4-02, M4-04, M4-10 and M4-11 |
+| 4 | The third store; two stores still show immunity | Scarborough's part of M4-02, M4-04 and M4-10 |
 
 
 Never cut: the gate (M3-06), the same-model hash (M3-04), money integrity (M1-06, M1-07), the live rollout (M4-02), rollback (M2-11) or the memory rules (M2-10).
