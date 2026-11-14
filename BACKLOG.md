@@ -14,7 +14,7 @@
 | M1 | A real purchase through chat on a phone | M1-09, on the deployed app | 12:40 | Done |
 | M2 | v0 gets conned, incidents and cons land in Atlas under the memory rules, and a version rolls out to every store and back | M2-09 | 14:20 | Done |
 | M3 | The stores learn: a version is proven on the held-out set, goes live everywhere, and Roll back takes it back | M3-10, on the deployed app | 15:25 | Done |
-| M4 | The 3-minute demo works end to end, driven only by us, and is recorded | M4-10 | 16:00 | 1 of 6 |
+| M4 | The 3-minute demo works end to end, driven only by us, and is recorded | M4-10 | 16:00 | Done |
 | Submit | Frozen, submitted and rehearsed | F06, submitted | 16:50 | 0 of 8 |
 
 **Owners:**
@@ -88,12 +88,12 @@ The 3-minute demo works end to end from a reset, driven only by us. If M3 is gre
 
 | ID | Task | Done when | Owner | By | State |
 |---|---|---|---|---|---|
-| M4-04 | Three stores' look | The three stores have names, colors and awnings (no QR codes). Cut 4 drops Scarborough | Kasra B | 12:25 | In progress |
-| M4-01 | Learning panel | It shows the cons it remembered, the new rules, the evaluation's progress and verdict, and "same model, same prompt" with the hash | Mahyar | 14:50 | In progress |
-| M4-03 | Immunity, forget and numbers | It shows each store's time to immunity and, after a rollback, its time to forget and that learning is paused, the money blocked, and the before and after numbers | Mahyar | 15:20 | In progress |
-| M4-07 | Memory panel | Each con's summary, first store and covering version, under the three memory rules. Cut 3 keeps only the rules | Mahyar | 15:45 | In progress |
+| M4-04 | Three stores' look | The three stores have names, colors and awnings (no QR codes). Cut 4 drops Scarborough | Kasra B | 12:25 | Done |
+| M4-01 | Learning panel | It shows the cons it remembered, the new rules, the evaluation's progress and verdict, and "same model, same prompt" with the hash | Mahyar | 14:50 | Done |
+| M4-03 | Immunity, forget and numbers | It shows each store's time to immunity and, after a rollback, its time to forget and that learning is paused, the money blocked, and the before and after numbers | Mahyar | 15:20 | Done |
+| M4-07 | Memory panel | Each con's summary, first store and covering version, under the three memory rules. Cut 3 keeps only the rules | Mahyar | 15:45 | Done |
 | M4-08 | Version chart | Scam success and honest service across versions. Cut 2: only if time is left | Mahyar | 15:45 | Done |
-| M4-10 | **M4 check** | The stage demo works end to end on the live app, from a reset and driven only by us, including the learning loop for the judges. No recording (decided 11:55); the helper's /screen capture during the run feeds the launch video | both | 16:00 | Not started |
+| M4-10 | **M4 check** | The stage demo works end to end on the live app, from a reset and driven only by us, including the learning loop for the judges. No recording (decided 11:55); the helper's /screen capture during the run feeds the launch video | both | 16:00 | Done |
 
 ## Submit by 16:50
 
