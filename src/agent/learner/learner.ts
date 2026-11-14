@@ -99,7 +99,9 @@ export async function proposeVersion(input: { active: GuardrailVersion; cons: Co
       const covered = new Set(rules.flatMap((r) => r.cons));
       const missed = input.cons.filter((c) => !covered.has(c._id)).map((c) => c._id);
       if (missed.length) problems.push(`these new cons are not covered by any rule: ${missed.join(', ')}`);
-      if (problems.length === 0) return { title: parsed.title.trim().slice(0, 120), rules, learnMs: Date.now() - started };
+      // The model doesn't know the version number it will get: drop a "v1:" it may have guessed.
+      const title = parsed.title.trim().replace(/^v\d+\s*[:\-–—]\s*/i, '').slice(0, 120);
+      if (problems.length === 0) return { title, rules, learnMs: Date.now() - started };
     }
     if (round === 2) throw new Error(`invalid version after a repair round: ${problems.slice(0, 4).join('; ')}`);
     messages.push({ role: 'assistant', content: response.content }, { role: 'user', content: `That version has problems:\n${problems.map((p) => `- ${p}`).join('\n')}\nWrite the complete corrected version.` });
