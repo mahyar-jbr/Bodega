@@ -111,7 +111,7 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
   const epoch = state?.epoch ?? 0;
   const activeVersion = state?.activeVersion ?? 0;
 
-  const [metrics, guardrails, incidents, cons, blocks, evaluations, rollouts, orders] = await Promise.all([
+  const [metrics, guardrails, incidents, cons, blocks, evaluations, rolloutRows, orders] = await Promise.all([
     deps.metrics(),
     db.collection<GuardrailDoc>(GUARDRAILS).find({ _id: { $gt: 0 } }).sort({ _id: -1 }).limit(10).toArray(),
     db.collection<IncidentDoc>(INCIDENTS).find({ epoch }).sort({ at: -1 }).limit(50).toArray(),
@@ -122,6 +122,9 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
     db.collection('orders').find({}, { projection: { number: 1, storeId: 1, shopperId: 1, lines: 1, totalCents: 1, createdAt: 1 } })
       .sort({ createdAt: -1 }).limit(FEED_MAX).toArray(),
   ]);
+
+  // One row per store for the current change, even if a store reported it more than once (keep its first report).
+  const rollouts = dedupeRollouts(rolloutRows, state?.activeVersion ?? 0);
 
   const byVersion = new Map(guardrails.map((g) => [g._id, g]));
   const sinceReset = state?.change === 'reset' ? state.changedAt : null;
@@ -202,7 +205,7 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
   const after = activeVersion > 0 ? recentEvals.find((e) => e.version === activeVersion && e.status === 'done' && e.summary) : undefined;
   if (baselines.length && after?.summary) {
     const worst = baselines.reduce((a, b) => (b.summary!.honest.turnedAway > a.summary!.honest.turnedAway ? b : a));
-    const promoteMs = state?.change === 'promote' ? rollouts.map((r) => r.ms) : [];
+    const promoteMs = state?.change === 'promote' ? rollouts.map((r) => r.ms) : [];   // one per store
     results = {
       before: { version: 0, scamsPct: worst.summary!.scams.successPct, honestAway: worst.summary!.honest.turnedAway },
       after: { version: activeVersion, scamsPct: after.summary.scams.successPct, honestAway: after.summary.honest.turnedAway },
@@ -325,4 +328,17 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
     : activeVersion > 0 ? 'round2' : 'round1';
 
   return { scene, activeVersion, epoch, tiles, feed, cons: conRows, learning, rollout, versions, audits, results };
+}
+
+/** One rollout per store for a change: duplicates (by store, version, change and changedAt) collapse to the fastest. */
+export function dedupeRollouts(rows: RolloutDoc[], version: number): RolloutDoc[] {
+  const best = new Map<string, RolloutDoc>();
+  for (const r of rows) {
+    if (r.version !== version) continue;
+    const key = `${r.storeId}|${r.version}|${r.change}|${new Date(r.changedAt).getTime()}`;
+    const prev = best.get(key);
+    if (!prev || r.ms < prev.ms) best.set(key, r);
+  }
+  // Within this change there's one key per store.
+  return [...best.values()];
 }
