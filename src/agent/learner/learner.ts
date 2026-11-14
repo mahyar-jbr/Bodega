@@ -24,7 +24,7 @@ export type { GateResult };
 
 export type GateFn = (version: number, opts: { attempt: 1 | 2 }) => Promise<GateResult>;
 
-export type LearningPhase = 'learning' | 'gating' | 'promoted' | 'rejected' | 'failed' | 'skipped';
+export type LearningPhase = 'learning' | 'gating' | 'promoted' | 'rejected' | 'failed' | 'skipped' | 'awaiting_approval' | 'rejected_by_operator';
 
 export interface LearningRunDoc {
   _id: ObjectId;
@@ -211,6 +211,7 @@ export function createLearner({ db, store, conMemory, gate, delayMs = LEARN_DELA
       heartbeat.unref();
       const st = await readAgentState(db);
       if (trigger === 'auto' && st.learningPaused) return;
+      if (st.awaitingApproval != null) return;        // one version at a time waits for a person
       const all = await conMemory.uncovered(st.epoch);
       const fresh = trigger === 'auto' ? all.filter((c) => !attempted.has(c._id)) : all;
       if (fresh.length === 0) return;
@@ -247,7 +248,9 @@ export function createLearner({ db, store, conMemory, gate, delayMs = LEARN_DELA
         await runs.updateOne({ _id: run._id, 'attempts.version': saved.version },
           { $set: { 'attempts.$.verdict': result.verdict, 'attempts.$.reasons': result.reasons, 'attempts.$.evaluationId': result.evaluationId } });
         if (result.verdict === 'promoted') {
-          await runs.updateOne({ _id: run._id }, { $set: { phase: 'promoted', finishedAt: new Date() } });
+          // With approval required, the gate's promotion is held: the version waits for a person.
+          const held = (await db.collection<{ _id: number; status: string }>('guardrails').findOne({ _id: saved.version }))?.status === 'awaiting_approval';
+          await runs.updateOne({ _id: run._id }, { $set: { phase: held ? 'awaiting_approval' : 'promoted', finishedAt: new Date() } });
           return;
         }
         feedback = describeGate(saved.version, result);
@@ -300,6 +303,7 @@ export function createLearner({ db, store, conMemory, gate, delayMs = LEARN_DELA
       const st = await readAgentState(db);
       const lockFresh = st.learning && st.learningLockedAt !== undefined && Date.now() - new Date(st.learningLockedAt).getTime() < LOCK_LEASE_MS;
       if (running || lockFresh) return { started: false, reason: 'Already learning.' };
+      if (st.awaitingApproval != null) return { started: false, reason: `v${st.awaitingApproval} is waiting for approval.` };
       await state.updateOne({ _id: 'agent' }, { $set: { learningPaused: false } });
       if ((await conMemory.uncovered(st.epoch)).length === 0) return { started: false, reason: 'No new cons to learn from.' };
       if (timer) { clearTimeout(timer); timer = undefined; }

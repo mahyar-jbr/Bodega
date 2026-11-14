@@ -8,10 +8,13 @@ import { createAuditor, type Auditor } from './auditor/auditor';
 import { atlasConversations, conversationIdFor, type ConversationLog } from './conversations';
 import { V0 } from './guard/types';
 import { gate, gateDemo, runEvaluation } from './gate/gate';
-import { createLearner, type Learner } from './learner/learner';
+import { createLearner, LEARNING_RUNS, type Learner } from './learner/learner';
 import { createConMemory, type ConMemory } from './memory/con-memory';
+import { forgetShopper } from './memory/forget';
 import { ensureMemoryRules } from './memory/memory-rules';
-import { resetAgentState, rollbackActive } from './rollout/state';
+import { proveMemoryRules } from './memory-proof';
+import { approveAwaiting, GUARDRAILS, rejectAwaiting, resetAgentState, rollbackActive, setApprovalRequired, type GuardrailDoc } from './rollout/state';
+import type { AwaitingApproval } from '../shared/contract';
 import { createStoreRuntimes, type StoreRuntimes } from './rollout/runtimes';
 import { screenSnapshot } from './screen/snapshot';
 import { STORE_NAMES } from './shopkeeper/prompt';
@@ -56,6 +59,17 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
   }
 
   let starting: Promise<void> | null = null;
+
+  /** The version waiting for approval, as the contract shows it (with its gate numbers). */
+  async function awaitingApprovalOf(n: number | null): Promise<AwaitingApproval | null> {
+    if (n === null) return null;
+    const doc = await deps.db.collection<GuardrailDoc & { gate?: { candidate?: { scamSuccess: number; scamsTotal: number; honestTurnedAway: number; honestTotal: number } } }>(GUARDRAILS).findOne({ _id: n });
+    if (!doc || doc.status !== 'awaiting_approval') return null;
+    const c = doc.gate?.candidate;
+    return { version: n, title: doc.title, rules: doc.rules.map((r) => r.title),
+      scamSuccess: c?.scamSuccess ?? 0, scamsTotal: c?.scamsTotal ?? 0, honestTurnedAway: c?.honestTurnedAway ?? 0, honestTotal: c?.honestTotal ?? 0,
+      since: doc.awaitingSince ?? doc.createdAt };
+  }
 
   async function startOnce(): Promise<void> {
       await ensureMemoryRules(deps.db);
@@ -134,9 +148,11 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
 
     async state() {
       const s = runtimes?.agentState();
+      const awaitingApproval = await awaitingApprovalOf(s?.awaitingApproval ?? null);
       const stores = runtimes?.stores() ?? STORE_IDS.map((storeId) => ({ storeId, appliedVersion: 0, appliedAt: null, online: !offlineBeforeStart.has(storeId) }));
       const state = {
         activeVersion: s?.activeVersion ?? 0, learning: s?.learning ?? false, learningPaused: s?.learningPaused ?? false, stores,
+        approvalRequired: s?.approvalRequired ?? false, awaitingApproval,
         // The big screen's data (summaries, titles, nicknames and numbers only), once the agent has started.
         ...(runtimes && auditor ? { screen: await screenSnapshot({ db: deps.db, store, metrics: () => auditor!.metrics(), stores: () => stores, settingsHash: SETTINGS_HASH }) } : {}),
       };
@@ -174,6 +190,39 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
       learner?.reset();
       sent.clear();
       await r.refresh();
+    },
+    async setApprovalRequired(on) {
+      requireRuntimes();
+      await setApprovalRequired(deps.db, on);
+      await runtimes!.refresh();
+      return { approvalRequired: on };
+    },
+    async approve() {
+      requireRuntimes();
+      const r = await approveAwaiting(deps.db);
+      if (r.approved) {
+        await deps.db.collection(LEARNING_RUNS).updateMany({ phase: 'awaiting_approval', 'attempts.version': r.version },
+          { $set: { phase: 'promoted', approvedAt: new Date() } });
+      }
+      await runtimes!.refresh();
+      return r;
+    },
+    async reject(reason) {
+      requireRuntimes();
+      const r = await rejectAwaiting(deps.db, reason);
+      if (r.rejected) {
+        await deps.db.collection(LEARNING_RUNS).updateMany({ phase: 'awaiting_approval', 'attempts.version': r.version },
+          { $set: { phase: 'rejected_by_operator', rejectedAt: new Date() } });
+      }
+      await runtimes!.refresh();
+      return r;
+    },
+    async forgetShopper(shopperId) {
+      sent.delete(shopperId);
+      return forgetShopper(deps.db, store, shopperId);
+    },
+    async proveMemoryRules() {
+      return proveMemoryRules(deps.db);
     },
     async setStoreOnline(storeId, online) {
       if (runtimes) await runtimes.setOnline(storeId, online);
