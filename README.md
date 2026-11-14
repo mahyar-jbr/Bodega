@@ -26,7 +26,7 @@
 
 ## What it does
 
-Bodega is a chain of three AI-run corner stores: Queen St, Yonge St and Scarborough. Shoppers open a store's page on their phone, get $20 of credits and buy snacks by chatting with that store's Claude shopkeeper.
+Bodega is a chain of three AI-run corner stores: Queen St, Yonge St and Scarborough. Shoppers open a store's page on their phone, get $20 of credits and buy snacks by chatting with that store's Claude shopkeeper, typing or [talking](#talk-to-it).
 
 Shop agents like this get talked into giving stock away: fake codes, fake memberships, refunds for things never bought. Bodega turns every con that works into a tested fix for every store:
 
@@ -39,6 +39,14 @@ Shop agents like this get talked into giving stock away: fake codes, fake member
 <p align="center"><img src="docs/media/phone-shop.png" width="360" alt="The Queen St shop on a phone: the shopkeeper greets Lucky Fox 52, sells one iced tea for $2.50 and prints receipt Q-1013, with the wallet at $17.50 and Policy v0 in the header"></p>
 
 <p align="center"><em>A shop on a phone: chat with the shopkeeper, pay with play credits, get a receipt.</em></p>
+
+### Talk to it
+
+Hold the mic and talk. ElevenLabs Scribe shows a live transcript while you speak, your words go through the same frozen shopkeeper and the same guard as typed text, and the reply is spoken back with ElevenLabs text-to-speech. Per-IP caps and daily ceilings bound what voice can spend, and an unknown shopper spends nothing.
+
+### The whole loop, live
+
+The big screen's Flow scene draws the mechanism as one loop of 15 steps, lit by real events as they happen: the con, the auditor, Atlas remembering it, the rule Claude writes, the held-out gate, every store immune, round 2 blocked at the same guard, and the rollback. `/stage` puts the big screen and a phone-size shop with five shopper tabs on one laptop, with the demo controls one key away.
 
 ## Results
 
@@ -84,6 +92,10 @@ Per category, from `npm run compare -- 0 1` (6 cases each):
 <p align="center">
   <img src="docs/media/flash-sale.png" width="100%" alt="The flash sale at Queen St on the big screen: 100 shopper dots with 10 lit, 10 hoodies all sold, 10 sold and 0 oversold, and a note that every order is one Atlas transaction and every wallet matches its ledger">
 </p>
+
+**It works every time.** `npm run stage-run` runs the whole stage scenario against the live app through the API, with a pass or fail per step. Three live runs back to back passed 3 of 3: from the opening to every store immune in 44 to 48 seconds, immunity in about 312 ms, forgetting in about 257 ms, and the gate at 0 of 60 held-out scams with 2 to 3 of 60 honest customers turned away.
+
+**New tricks, after learning.** A probe of 20 new con attempts against the learned rules: none worked, and 8 of 8 honest requests were served.
 
 **A store that was offline catches up.** Take a store offline, promote a version, and bring it back: it applies the version it missed and reports when, measured from the promotion. Time to immunity counts only the stores that were online.
 
@@ -158,7 +170,7 @@ flowchart TB
     store <-->|"contract.ts"| agent
   end
   atlas[("MongoDB Atlas")]
-  models["Claude · Voyage"]
+  models["Claude · Voyage · ElevenLabs"]
   phones <-->|"HTTP · SSE"| store
   store <-->|"transactions · change stream"| atlas
   agent <-->|"con memory · guardrail versions"| atlas
@@ -167,6 +179,7 @@ flowchart TB
 
 - **Stack:** TypeScript, Node 24, Express 5 (run with tsx), Vite + React 19 + Tailwind 4, MongoDB Node driver 7, zod and Vitest. No Docker.
 - **Models:** Claude Sonnet 5.5 is the shopkeeper, Claude Opus 5.5 the learner and Claude Haiku 5.5 writes incident summaries. Voyage `voyage-4-lite` embeddings come through Atlas.
+- **Voice:** ElevenLabs: Scribe for speech-to-text, with a live transcript while you speak, and Flash v2.5 for the spoken replies.
 - **The boundary:** the store side and the agent side meet in-process through one typed file, `src/shared/contract.ts`, so two people could build in parallel from the first hour.
 
 ## Run it locally
@@ -180,7 +193,7 @@ npm run seed              # the three stores, the catalog with stock, codes and 
 npm run dev               # the server on :3000, and the web app on :5173, which forwards /api to it
 ```
 
-Then open `/s/queen` (or `/s/yonge`, `/s/scarborough`) for a store, `/screen` for the big screen and `/ops` for the ops console.
+Then open `/s/queen` (or `/s/yonge`, `/s/scarborough`) for a store, `/screen` for the big screen, `/stage` for the one-laptop demo view (`o` shows the demo controls) and `/ops` for the ops console.
 
 | Command | What it does |
 |---|---|
@@ -194,6 +207,7 @@ Then open `/s/queen` (or `/s/yonge`, `/s/scarborough`) for a store, `/screen` fo
 | `npm run eval -- --set heldout --record baseline` | Scores the sealed held-out set (aggregates only, about $3 of model calls) |
 | `npm run compare -- 0 [n]` | Prints v0 against v[n] from their recorded held-out runs, overall and per category, with both settings hashes |
 | `npm run compare -- 0 [n] --archive` | The same for a version set aside by `npm run fresh-show` (the newest show, or `--epoch N` for one show); v0's baselines stay live |
+| `npm run stage-run` | Runs the stage scenario on the live app with a pass or fail per step and its timings (`-- --runs 3` for three, `--url` for another server; about $0.50 a run) |
 | `npm run try` | Replays dev cases through the shopkeeper with their transcripts, and lists the dev scams that con v0 every time (`--case S-203`, `--kind scam`, `--runs 2`) |
 
 `GET /api/health` answers 200 when Atlas answers a ping, and 503 with the reason otherwise. Without `ANTHROPIC_API_KEY` the app runs a keyless stand-in shopkeeper (and evaluations refuse to run); without the Agent Memory credentials, the con memory groups cons by violation.
@@ -211,7 +225,7 @@ Everything after the tag is built on Nov 14, 2026, from 10:45: [see the changes]
 
 ## Built at the event
 
-From 10:45 on Nov 14, 2026, at Agents in Context Toronto, we built everything else: the contract between the two sides, the money layer and the change bus, the shopkeeper, guard and auditor, the con memory, the learner and the held-out gate, rollout and rollback, the phone shop, the ops console, the big screen and the bots. The demo and the video show only this work.
+From 10:45 on Nov 14, 2026, at Agents in Context Toronto, we built everything else: the contract between the two sides, the money layer and the change bus, the shopkeeper, guard and auditor, the con memory, the learner and the held-out gate, rollout and rollback, the phone shop and its voice line, the ops console, the big screen with the Flow scene, `/stage` and the bots. The demo and the video show only this work.
 
 ## Team
 
