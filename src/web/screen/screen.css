@@ -246,3 +246,24 @@
 .bs-audit-row { display: grid; grid-template-columns: 90px 1fr auto; gap: 16px; align-items: baseline; padding: 12px 0; border-top: 1px solid var(--line); }
 .bs-audit-cover { border-left: 1px solid var(--line); padding-left: var(--space-8); }
 .bs-audit-cover b { font-weight: 560; }
+.bs-screen { position: absolute; inset: 0; overflow: hidden; }
+
+/* /stage: the big screen on the left, a phone-size shop window on the right */
+.st-root { display: grid; grid-template-rows: 100%; }
+.st-screen { position: relative; min-width: 0; }
+.st-phone-col { display: flex; flex-direction: column; align-items: center; padding: 24px 24px 24px 0; gap: 0; }
+.st-tabs { display: flex; gap: 6px; align-items: center; margin-bottom: 14px; }
+.st-tab {
+  border: 1px solid var(--control-edge); background: transparent; color: var(--ink-2);
+  border-radius: var(--radius-pill); padding: 6px 14px; cursor: pointer;
+  transition: background var(--dur-fast), color var(--dur-fast);
+}
+.st-tab[aria-selected="true"] { background: var(--glass-sheen-strong); color: var(--ink); border-color: transparent; }
+.st-tab:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.st-phone {
+  position: relative; border-radius: 44px; overflow: hidden;
+  box-shadow: 0 0 0 10px #05141c, 0 0 0 11px var(--glass-edge), var(--shadow-float);
+  background: var(--canvas);
+}
+.st-frame { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; visibility: hidden; }
+.st-frame[data-active="true"] { visibility: visible; }

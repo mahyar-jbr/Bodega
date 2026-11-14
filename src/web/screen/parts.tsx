@@ -24,20 +24,25 @@ export function AwningMark({ store, width }: { store: StoreKey | 'brand'; width:
   );
 }
 
-// Holds the 1920 by 1080 design and scales it to the window.
+// Holds the 1920 by 1080 design and scales it to fit its container (the window, on /screen).
 export function StageFrame({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ scale: 1, x: 0, y: 0 });
   useLayoutEffect(() => {
+    const parent = ref.current?.parentElement;
+    if (!parent) return;
     const fit = () => {
-      const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
-      setBox({ scale, x: (window.innerWidth - 1920 * scale) / 2, y: (window.innerHeight - 1080 * scale) / 2 });
+      const w = parent.clientWidth, h = parent.clientHeight;
+      const scale = Math.min(w / 1920, h / 1080);
+      setBox({ scale, x: (w - 1920 * scale) / 2, y: (h - 1080 * scale) / 2 });
     };
     fit();
-    window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
+    const observer = new ResizeObserver(fit);
+    observer.observe(parent);
+    return () => observer.disconnect();
   }, []);
   return (
-    <div className="bs-stage" style={{ transform: `translate(${box.x}px, ${box.y}px) scale(${box.scale})` }}>
+    <div ref={ref} className="bs-stage" style={{ transform: `translate(${box.x}px, ${box.y}px) scale(${box.scale})` }}>
       {children}
     </div>
   );

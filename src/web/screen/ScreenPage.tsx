@@ -33,18 +33,27 @@ function usePinnedScene(): { pinned: Scene | null; auditIndex: number; openAudit
 }
 
 export default function ScreenPage() {
+  // Keys work without a click first.
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => { root.current?.focus(); }, []);
+  return (
+    <div className="bs-root" data-theme="stage" ref={root} tabIndex={-1}>
+      <BigScreen />
+    </div>
+  );
+}
+
+/** The big screen at 1920 by 1080, scaled into its container: /screen fills the window, /stage the left side. */
+export function BigScreen() {
   const { data, connection } = useScreenData();
   const { pinned, auditIndex, openAudit } = usePinnedScene();
   // ?scene=learning previews a scene by hand.
   const [params] = useSearchParams();
   const asked = params.get('scene');
   const scene: Scene = pinned ?? (SCENES.some((s) => s.key === asked) ? (asked as Scene) : data.scene);
-  // Keys work without a click first.
-  const root = useRef<HTMLDivElement>(null);
-  useEffect(() => { root.current?.focus(); }, []);
 
   return (
-    <div className="bs-root" data-theme="stage" data-connection={connection} ref={root} tabIndex={-1}>
+    <div className="bs-screen" data-connection={connection}>
       <StageFrame>
         <StageHeader scene={scene} />
         <div className="bs-tiles">

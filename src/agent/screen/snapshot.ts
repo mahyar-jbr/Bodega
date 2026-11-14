@@ -92,7 +92,20 @@ export interface SnapshotDeps {
 const iso = (d: Date | null | undefined) => (d ? new Date(d).toISOString() : null);
 const short = (s: string, n = 30) => (s.length <= n ? s : `${s.slice(0, n - 1).trimEnd()}…`);
 
-export async function screenSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
+// state() is polled by the screen and by every shop window: build the snapshot at most this often.
+const SNAPSHOT_TTL_MS = 750;
+let cached: { db: string; at: number; value: Promise<ScreenSnapshot> } | null = null;
+
+export function screenSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
+  const now = Date.now();
+  if (cached && cached.db === deps.db.databaseName && now - cached.at < SNAPSHOT_TTL_MS) return cached.value;
+  const value = buildSnapshot(deps);
+  cached = { db: deps.db.databaseName, at: now, value };
+  value.catch(() => { if (cached?.value === value) cached = null; });
+  return value;
+}
+
+async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
   const { db } = deps;
   const state = await db.collection<AgentStateDoc>(AGENT_STATE).findOne({ _id: 'agent' });
   const epoch = state?.epoch ?? 0;
