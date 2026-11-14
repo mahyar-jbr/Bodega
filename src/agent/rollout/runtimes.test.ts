@@ -48,6 +48,8 @@ describe.skipIf(!uri)('store runtimes on Atlas', () => {
     expect(promoted.map((r) => `${r.storeId}:${r.change}`).sort()).toEqual(['queen:promote', 'scarborough:promote']);
 
     expect(await waitFor(async () => (await db.collection<RolloutDoc>('rollouts').countDocuments({ changedAt: p.changedAt })) >= 2)).toBe(true);
+    // A 150 ms poll races the catch-up below; whichever applies first must record it as the catch-up.
+    await new Promise((r) => setTimeout(r, 140));
     await runtimes.setOnline('yonge', true);
     expect(runtimes.versionFor('yonge').version).toBe(v.version);
     expect(runtimes.isOnline('yonge')).toBe(true);

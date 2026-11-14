@@ -33,13 +33,15 @@ interface Runtime {
   appliedAt: Date | null;
   appliedChange: number;        // changedAt (ms) of the change this store last applied
   online: boolean;
+  /** Back online and not yet caught up: the next apply, whichever path delivers it, is the catch-up. */
+  catchingUp: boolean;
   queue: Promise<void>;
 }
 
 export interface StoreRuntimesOptions { db: Db; bus: ChangeBus; pollMs?: number }
 
 export function createStoreRuntimes({ db, bus, pollMs = 3_000 }: StoreRuntimesOptions) {
-  const runtimes = new Map<StoreId, Runtime>(STORE_IDS.map((id) => [id, { version: V0, appliedAt: null, appliedChange: 0, online: true, queue: Promise.resolve() }]));
+  const runtimes = new Map<StoreId, Runtime>(STORE_IDS.map((id) => [id, { version: V0, appliedAt: null, appliedChange: 0, online: true, catchingUp: false, queue: Promise.resolve() }]));
   let state: AgentStateDoc | null = null;
   let startedAt = 0;
   let timer: NodeJS.Timeout | undefined;
@@ -55,7 +57,11 @@ export function createStoreRuntimes({ db, bus, pollMs = 3_000 }: StoreRuntimesOp
     const r = runtimes.get(storeId)!;
     r.queue = r.queue.then(async () => {
       const change = doc.changedAt.getTime();
-      if (!r.online || change <= r.appliedChange) return;
+      if (!r.online || change <= r.appliedChange) {
+        if (r.online && via === 'catch-up') r.catchingUp = false;   // nothing was missed
+        return;
+      }
+      const catchup = r.catchingUp;
       const version = await loadVersion(db, doc.activeVersion);
       if (!version) { console.error(`${storeId}: version ${doc.activeVersion} not found; keeping v${r.version.version}`); return; }
       const errors = validateVersion(version);
@@ -64,6 +70,7 @@ export function createStoreRuntimes({ db, bus, pollMs = 3_000 }: StoreRuntimesOp
       r.version = version;
       r.appliedAt = appliedAt;
       r.appliedChange = change;
+      r.catchingUp = false;
       await db.collection<StoreRuntimeDoc>(STORE_RUNTIME).updateOne({ _id: storeId },
         { $set: { appliedVersion: version.version, appliedAt, online: r.online } }, { upsert: true });
       // Changes made while this process runs get a rollout record; at boot a store just loads the active version.
@@ -71,8 +78,8 @@ export function createStoreRuntimes({ db, bus, pollMs = 3_000 }: StoreRuntimesOp
       // deploy), the first one to apply it records the time; the others leave it alone.
       if (change >= startedAt) {
         await db.collection<RolloutDoc>(ROLLOUTS).updateOne(
-          { storeId, version: version.version, change: via === 'catch-up' ? 'catchup' : doc.change, changedAt: doc.changedAt },
-          { $setOnInsert: { appliedAt, ms: appliedAt.getTime() - change, via } },
+          { storeId, version: version.version, change: catchup ? 'catchup' : doc.change, changedAt: doc.changedAt },
+          { $setOnInsert: { appliedAt, ms: appliedAt.getTime() - change, via: catchup ? 'catch-up' : via } },
           { upsert: true },
         ).catch((e) => { if ((e as { code?: number }).code !== 11000) throw e; });
       }
@@ -110,6 +117,9 @@ export function createStoreRuntimes({ db, bus, pollMs = 3_000 }: StoreRuntimesOp
     async setOnline(storeId: StoreId, online: boolean) {
       const r = runtimes.get(storeId);
       if (!r) return;
+      // Set before the store is online again, so a poll or bus apply that wins the race is still
+      // recorded as the catch-up, not as a live rollout.
+      if (online && !r.online) r.catchingUp = true;
       r.online = online;
       await db.collection<StoreRuntimeDoc>(STORE_RUNTIME).updateOne({ _id: storeId }, { $set: { online } }, { upsert: true });
       if (online) await applyAt(storeId, await readAgentState(db), 'catch-up');
