@@ -38,7 +38,7 @@ export function fallbackText(violations: Violation[]): IncidentText {
 }
 
 const Out = z.object({
-  title: z.string().describe('2 to 4 lowercase words naming the trick, for a feed line, e.g. "fake code", "fake manager", "refund for nothing"'),
+  title: z.string().describe('1 to 3 lowercase words naming the trick, at most 14 characters, for a feed line, e.g. "fake code", "fake manager", "free item", "fake refund"'),
   summary: z.string().describe('The trick in plain words, 3 to 8 words, sentence case, no period, e.g. "Fake 50% code from Instagram"'),
 });
 
@@ -57,13 +57,12 @@ export async function summarizeIncident(input: {
   customerTurns: string[];        // raw: read here, never stored or shown
   toolReason: string | null;      // the reason the shopkeeper passed with the money call
 }): Promise<IncidentText> {
-  if (!process.env.ANTHROPIC_API_KEY || input.customerTurns.length === 0) return fallbackText(input.violations);
+  if (!process.env.ANTHROPIC_API_KEY || (input.customerTurns.length === 0 && !input.toolReason)) return fallbackText(input.violations);
   client ??= new Anthropic({ maxRetries: 1, timeout: TIMEOUT_MS });
   const context = [
     `What went wrong: ${input.violations.join(', ')}; the store lost $${(input.lossCents / 100).toFixed(2)} on a ${input.kind}.`,
     input.toolReason ? `The shopkeeper's note on the ${input.kind}: ${input.toolReason.slice(0, 200)}` : '',
-    'What the customer said:',
-    ...input.customerTurns.slice(-3).map((t) => `- ${t.slice(0, 300)}`),
+    ...(input.customerTurns.length ? ['What the customer said:', ...input.customerTurns.slice(-3).map((t) => `- ${t.slice(0, 300)}`)] : []),
   ].filter(Boolean).join('\n');
   try {
     const response = await client.messages.parse({
@@ -76,11 +75,23 @@ export async function summarizeIncident(input: {
     const out = response.parsed_output;
     if (response.stop_reason === 'refusal' || !out) return fallbackText(input.violations);
     return {
-      title: out.title.trim().toLowerCase().slice(0, 24),
+      title: shortTitle(out.title, input.violations),
       summary: out.summary.trim().replace(/\.$/, '').slice(0, 60),
       source: 'haiku',
     };
   } catch {
     return fallbackText(input.violations);
   }
+}
+
+/** At most 14 characters, cut at a word; the fixed title when nothing fits. */
+function shortTitle(raw: string, violations: Violation[]): string {
+  const words = raw.trim().toLowerCase().replace(/[."]/g, '').split(/\s+/);
+  let out = '';
+  for (const w of words) {
+    const next = out ? `${out} ${w}` : w;
+    if (next.length > 14) break;
+    out = next;
+  }
+  return out || fallbackText(violations).title;
 }

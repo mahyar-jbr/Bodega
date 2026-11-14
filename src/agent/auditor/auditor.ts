@@ -57,6 +57,7 @@ export type AgentMetrics = { storeId: StoreId; lostCents: number; blockedCents: 
 
 const STORES: StoreId[] = ['queen', 'yonge', 'scarborough'];
 const PER_MINUTE_WINDOW_MS = 30 * 60_000;
+const TURNS_WAIT_TRIES = 6, TURNS_WAIT_MS = 1_000;
 
 export function createAuditor(deps: AuditorDeps) {
   const { db } = deps;
@@ -88,6 +89,16 @@ export function createAuditor(deps: AuditorDeps) {
     return row?.cents ?? 0;
   }
 
+  // The money moves mid-reply, and the conversation is saved when the reply ends: wait for it briefly.
+  async function turnsWhenSaved(conversationId: string): Promise<string[]> {
+    for (let i = 0; i < TURNS_WAIT_TRIES; i++) {
+      const turns = await customerTurns(conversationId).catch(() => []);
+      if (turns.length) return turns;
+      await new Promise((r) => setTimeout(r, TURNS_WAIT_MS));
+    }
+    return [];
+  }
+
   /** Judge one ledger entry; a loss becomes an incident. Safe to call twice for the same entry. */
   async function audit(entry: LedgerEntry): Promise<IncidentDoc | null> {
     if (entry.kind !== 'sale' && entry.kind !== 'refund') return null;
@@ -99,7 +110,7 @@ export function createAuditor(deps: AuditorDeps) {
 
       const [shopper, turns, currentEpoch] = await Promise.all([
         deps.store.shopper(entry.shopperId),
-        entry.conversationId ? customerTurns(entry.conversationId).catch(() => []) : Promise.resolve([]),
+        entry.conversationId ? turnsWhenSaved(entry.conversationId) : Promise.resolve([]),
         epoch(),
       ]);
       const text = await summarize({ violations: judged.violations, lossCents: judged.lossCents, kind: judged.kind,
