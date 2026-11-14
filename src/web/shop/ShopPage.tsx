@@ -6,7 +6,7 @@ import { ApiError, apiJson } from '../ui/api';
 import { AwningMark } from '../ui/AwningMark';
 import { Icon } from '../ui/Icon';
 import { isStoreKey, STORES, type StoreKey } from '../ui/stores';
-import { ensureShopper, readTranscript, saveLocalShopper, saveTranscript, type LocalShopper } from './session';
+import { createShopSession, readTranscript, RESET_NOTICE, saveTranscript, SessionChangedError, type LocalShopper, type ShopSession } from './session';
 import { displayReply, policyLabel, policySnapshot, type PolicyState } from './presentation';
 import { VoiceButton } from './VoiceButton';
 import { VoiceTranscriptBubble, type VoiceDraft } from './VoiceTranscriptBubble';
@@ -98,6 +98,7 @@ export default function ShopPage() {
   const store = isStoreKey(storeId) ? storeId : null;
   const [shopper, setShopper] = useState<LocalShopper | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [wasReset, setWasReset] = useState(false);
   const [retry, setRetry] = useState(0);
   const [messages, setMessages] = useState<Message[]>([]);
   const [policy, setPolicy] = useState<PolicyState>({ version: 0, arrivedAt: null });
@@ -107,7 +108,11 @@ export default function ShopPage() {
   const [voicePreview, setVoicePreview] = useState<VoiceDraft | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const policyRef = useRef<PolicyState | null>(null);
+  const sessionRef = useRef<ShopSession | null>(null);
+  const chatPending = useRef(false);
   const spokenReplies = useReplyAudio(`${store ?? 'unknown'}:${slot ?? ''}`);
+  const clearAudio = useRef(spokenReplies.clear);
+  clearAudio.current = spokenReplies.clear;
 
   useEffect(() => {
     if (!store) return;
@@ -120,10 +125,20 @@ export default function ShopPage() {
     setVoicePhase('idle');
     setVoicePreview(null);
     setLoadError(false);
-    ensureShopper(store, slot).then((next) => {
+    setWasReset(false);
+    setSending(false);
+    chatPending.current = false;
+    const session = createShopSession(store, slot, (next, reason) => {
       if (!current) return;
       setShopper(next);
-      if (next.joined) {
+      if (reason === 'reset') {
+        setWasReset(true);
+        clearAudio.current();
+        setMessages([
+          ...(next.joined ? [{ id: makeId(), from: 'shopkeeper' as const, text: greeting(next.nickname), time: currentTime() }] : []),
+          { id: makeId(), from: 'system', text: RESET_NOTICE, time: currentTime() },
+        ]);
+      } else if (reason === 'load' && next.joined) {
         const saved = readTranscript<Message>(next.id);
         setMessages(saved.length ? saved : [{
           id: makeId(),
@@ -132,10 +147,12 @@ export default function ShopPage() {
           time: currentTime(),
         }]);
       }
-    }).catch(() => {
+    });
+    sessionRef.current = session;
+    void session.load().catch(() => {
       if (current) setLoadError(true);
     });
-    return () => { current = false; };
+    return () => { current = false; session.dispose(); sessionRef.current = null; };
   }, [retry, slot, store]);
 
   useEffect(() => {
@@ -151,12 +168,7 @@ export default function ShopPage() {
         if (event.coll !== 'shoppers' || !event.doc || typeof event.doc !== 'object') return;
         const doc = event.doc as Record<string, unknown>;
         if (doc.id !== shopper.id || typeof doc.walletCents !== 'number') return;
-        setShopper((current) => {
-          if (!current) return current;
-          const next = { ...current, walletCents: doc.walletCents as number };
-          saveLocalShopper(next, slot);
-          return next;
-        });
+        sessionRef.current?.setWallet(doc.id as string, doc.walletCents as number);
       } catch {
         // Heartbeats and future event shapes do not affect the shop session.
       }
@@ -226,20 +238,17 @@ export default function ShopPage() {
 
   function startShopping() {
     if (!shopper) return;
-    const next = { ...shopper, joined: true };
-    saveLocalShopper(next, slot);
-    setShopper(next);
-    setMessages([{ id: makeId(), from: 'shopkeeper', text: greeting(next.nickname), time: currentTime() }]);
+    sessionRef.current?.join();
+    setMessages([
+      { id: makeId(), from: 'shopkeeper', text: greeting(shopper.nickname), time: currentTime() },
+      ...(wasReset ? [{ id: makeId(), from: 'system' as const, text: RESET_NOTICE, time: currentTime() }] : []),
+    ]);
   }
 
   function acceptReply(reply: ChatReply, transcript?: string) {
     const id = makeId();
-    setShopper((current) => {
-      if (!current) return current;
-      const next = { ...current, walletCents: reply.walletCents };
-      saveLocalShopper(next, slot);
-      return next;
-    });
+    const session = sessionRef.current;
+    if (session?.shopper) session.setWallet(session.shopper.id, reply.walletCents);
     setMessages((current) => [...current,
       ...(transcript ? [{ id: makeId(), from: 'customer' as const, text: transcript, time: currentTime(), quiet: true }] : []),
       { id, from: 'shopkeeper', text: reply.reply, actions: reply.actions,
@@ -257,27 +266,27 @@ export default function ShopPage() {
 
   async function sendMessage(event?: FormEvent) {
     event?.preventDefault();
-    if (!shopper || sending || voicePhase !== 'idle') return;
+    if (!shopper || sending || chatPending.current || voicePhase !== 'idle') return;
     const text = draft.trim();
     if (!text) return;
+    const session = sessionRef.current;
+    if (!session) return;
+    const customerMessage: Message = { id: makeId(), from: 'customer', text, time: currentTime() };
+    chatPending.current = true;
 
     setDraft('');
     setSending(true);
-    setMessages((current) => [...current, {
-      id: makeId(),
-      from: 'customer',
-      text,
-      time: currentTime(),
-    }]);
-
     try {
-      const payload = await apiJson<unknown>('/api/chat', {
-        method: 'POST',
-        body: JSON.stringify({ shopperId: shopper.id, storeId: store, text }),
+      const payload = await session.run((shopperId) => {
+        // Recovery clears the old transcript. Reinsert this request once, using
+        // the same message id on its first attempt and its single retry.
+        setMessages((current) => current.some((message) => message.id === customerMessage.id) ? current : [...current, customerMessage]);
+        return apiJson<unknown>('/api/chat', { method: 'POST', body: JSON.stringify({ shopperId, storeId: store, text }) });
       });
       const reply = parseChatReply(payload);
       acceptReply(reply);
     } catch (error) {
+      if (error instanceof SessionChangedError || sessionRef.current !== session) return;
       setMessages((current) => [...current, {
         id: makeId(),
         from: 'system',
@@ -286,7 +295,7 @@ export default function ShopPage() {
         error: true,
       }]);
     } finally {
-      setSending(false);
+      if (sessionRef.current === session) { chatPending.current = false; setSending(false); }
     }
   }
 
@@ -300,7 +309,7 @@ export default function ShopPage() {
   return (
     <main className={`shop-page bd-surface bd-store-${store}`} data-theme="stage" style={style}>
       {!shopper.joined ? (
-        <JoinScreen store={store} shopper={shopper} onStart={startShopping} />
+        <JoinScreen store={store} shopper={shopper} onStart={startShopping} wasReset={wasReset} />
       ) : (
         <div className="shop-chat-layout">
           <ShopHeader store={store} walletCents={shopper.walletCents} policy={policy}
@@ -333,7 +342,8 @@ export default function ShopPage() {
                 />
                 <span className="shop-character-count bd-num">{draft.length}/{MAX_MESSAGE_LENGTH}</span>
               </div>
-              <VoiceButton key={shopper.id} shopperId={shopper.id} storeId={store} disabled={sending}
+              <VoiceButton key={`${store}:${slot ?? ''}`} shopperId={shopper.id} storeId={store} disabled={sending}
+                withShopper={sessionRef.current!.run}
                 onPhase={setVoicePhase} onPreview={setVoicePreview} onRecordGesture={spokenReplies.beginRecordingGesture}
                 onReply={(voice) => spokenReplies.receive(acceptReply(voice.reply, voice.transcript), voice)} onError={voiceError} />
               <button className="shop-send-button" type="submit" aria-label="Send message" disabled={sending || voicePhase !== 'idle' || !draft.trim()}>
@@ -356,7 +366,7 @@ function MissingStore() {
   );
 }
 
-function JoinScreen({ store, shopper, onStart }: { store: StoreKey; shopper: LocalShopper; onStart: () => void }) {
+function JoinScreen({ store, shopper, onStart, wasReset }: { store: StoreKey; shopper: LocalShopper; onStart: () => void; wasReset: boolean }) {
   const design = STORES[store];
   return (
     <section className="shop-join">
@@ -380,6 +390,7 @@ function JoinScreen({ store, shopper, onStart }: { store: StoreKey; shopper: Loc
           Talk the shopkeeper into a deal it shouldn’t make. Fake codes, sob stories, anything goes.
         </JoinDetail>
       </div>
+      {wasReset && <p className="shop-system-message" role="status">{RESET_NOTICE}</p>}
       <button type="button" className="shop-primary-button shop-start-button" onClick={onStart}>Start shopping</button>
     </section>
   );

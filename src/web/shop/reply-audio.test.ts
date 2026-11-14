@@ -233,6 +233,19 @@ describe('spoken reply playback', () => {
     expect(f.player.play).not.toHaveBeenCalled();
     expect(f.states['60']).toBe('ready');
   });
+
+  it('clears deleted-shopper replay data while preserving the unlocked element for the recovery reply', async () => {
+    const f = fixture();
+    f.audio.beginRecordingGesture(); await flush();
+    f.audio.receive('old-reply', reply); await flush();
+    f.audio.clear();
+    expect(f.states['old-reply']).toBeUndefined();
+    f.player.play.mockClear(); f.audio.play('old-reply');
+    expect(f.player.play).not.toHaveBeenCalled();
+    f.audio.receive('new-reply', reply); await flush();
+    expect(f.states['new-reply']).toBe('playing');
+    expect(f.createAudio).toHaveBeenCalledOnce();
+  });
 });
 
 function memoryStorage(): Storage {

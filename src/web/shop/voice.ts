@@ -1,5 +1,6 @@
 import type { ChatReply, StoreId } from '../../shared/contract';
 import { ApiError } from '../ui/api';
+import type { ShopperRequest } from './session';
 
 export type VoicePhase = 'idle' | 'requesting' | 'recording' | 'sending';
 export interface VoiceReply {
@@ -79,6 +80,7 @@ export function createVoiceRecorder(options: {
   onUnavailable: () => void;
   onRelease?: () => void;
   createLivePreview?: () => VoicePreview | null;
+  withShopper?: ShopperRequest;
 }) {
   let phase: VoicePhase = 'idle';
   let generation = 0;
@@ -116,24 +118,28 @@ export function createVoiceRecorder(options: {
   async function upload(blob: Blob, token: number) {
     setPhase('sending');
     request = new AbortController();
+    const signal = request.signal;
+    let errorTranscript: string | undefined;
     try {
-      const form = new FormData();
-      form.append('audio', blob, blob.type.includes('mp4') ? 'voice.m4a' : 'voice.webm');
-      form.append('shopperId', options.shopperId);
-      form.append('storeId', options.storeId);
-      // Let fetch set the multipart boundary; apiJson's default JSON header is inappropriate here.
-      const response = await fetch('/api/voice', { method: 'POST', body: form, signal: request.signal });
-      const payload = await response.json().catch(() => null);
-      if (token !== generation) return;
-      if (!response.ok) {
-        const error = new ApiError(response.status, typeof payload?.error === 'string' ? payload.error : null, 'Voice request failed');
-        if (error.code === 'voice_off' || response.status === 501) options.onUnavailable();
-        options.onError(error, typeof payload?.transcript === 'string' ? payload.transcript : undefined);
-        return;
-      }
-      options.onReply(parseVoiceReply(payload));
+      const send = async (shopperId: string) => {
+        const form = new FormData();
+        // Rebuild the multipart envelope on retry; the complete recording Blob stays in memory.
+        form.append('audio', blob, blob.type.includes('mp4') ? 'voice.m4a' : 'voice.webm');
+        form.append('shopperId', shopperId);
+        form.append('storeId', options.storeId);
+        const response = await fetch('/api/voice', { method: 'POST', body: form, signal });
+        const payload = await response.json().catch(() => null);
+        errorTranscript = typeof payload?.transcript === 'string' ? payload.transcript : undefined;
+        if (!response.ok) throw new ApiError(response.status, typeof payload?.error === 'string' ? payload.error : null, 'Voice request failed');
+        return parseVoiceReply(payload);
+      };
+      const reply = await (options.withShopper ? options.withShopper(send, signal) : send(options.shopperId));
+      if (token === generation) options.onReply(reply);
     } catch (error) {
-      if (token === generation) options.onError(error);
+      if (token === generation) {
+        if (error instanceof ApiError && (error.code === 'voice_off' || error.status === 501)) options.onUnavailable();
+        options.onError(error, errorTranscript);
+      }
     } finally {
       if (token === generation) { request = null; endPreview(true); setPhase('idle'); }
     }

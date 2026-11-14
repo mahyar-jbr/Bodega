@@ -96,6 +96,11 @@ export function createReplyAudio(options: {
     setEnabled(on: boolean) { enabled = on; if (!on) stop(); },
     play,
     stop,
+    clear() {
+      stop();
+      for (const id of replies.keys()) options.onState(id, undefined);
+      replies.clear();
+    },
     dispose() {
       if (disposed) return;
       disposed = true;

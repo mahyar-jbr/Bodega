@@ -48,5 +48,6 @@ export function useReplyAudio(scope: string) {
     receive(id: string, reply: VoiceReply) { current.current?.audio.receive(id, reply); },
     play(id: string) { current.current?.audio.play(id); },
     stop() { current.current?.audio.stop(); },
+    clear() { current.current?.audio.clear(); },
   };
 }

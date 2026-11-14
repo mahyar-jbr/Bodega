@@ -105,6 +105,33 @@ function opsPost(path: string, body?: unknown) {
 }
 
 describe('store and agent routes', () => {
+  it('looks up a shopper without writes, private fields or an agent call', async () => {
+    store.shopper.mockResolvedValueOnce(shopper);
+    const response = await request('/api/shoppers/shopper-1');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toEqual({ id: shopper.id, nickname: shopper.nickname, storeId: shopper.storeId, walletCents: shopper.walletCents });
+    expect(store.shopper).toHaveBeenCalledWith('shopper-1');
+    expect(store.createShopper).not.toHaveBeenCalled();
+    expect(agent.handleMessage).not.toHaveBeenCalled();
+  });
+
+  it('returns a non-cacheable unknown_shopper for a deleted shopper', async () => {
+    store.shopper.mockResolvedValueOnce(null);
+    const response = await request('/api/shoppers/deleted-shopper');
+    expect(response.status).toBe(404);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toEqual({ error: 'unknown_shopper' });
+    expect(store.createShopper).not.toHaveBeenCalled();
+    expect(agent.handleMessage).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid shopper lookup ids before reading the store', async () => {
+    const response = await request(`/api/shoppers/${'x'.repeat(201)}`);
+    expect(response.status).toBe(400);
+    expect(store.shopper).not.toHaveBeenCalled();
+  });
+
   it('creates a crowd shopper and returns the shopper directly', async () => {
     const response = await request('/api/shoppers', { method: 'POST', body: JSON.stringify({ storeId: 'queen' }) });
     expect(response.status).toBe(201);

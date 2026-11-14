@@ -3,6 +3,7 @@ import type { StoreId } from '../../shared/contract';
 import { canRecordVoice, createVoiceRecorder, voiceAvailable, type VoicePhase, type VoiceRecorder, type VoiceReply } from './voice';
 import { createLiveTranscript } from './live-transcript';
 import type { VoiceDraft } from './VoiceTranscriptBubble';
+import { SessionChangedError, type ShopperRequest } from './session';
 
 interface Props {
   shopperId: string;
@@ -13,6 +14,7 @@ interface Props {
   onError: (error: unknown, transcript?: string) => void;
   onPreview: (draft: VoiceDraft | null) => void;
   onRecordGesture: () => void;
+  withShopper: ShopperRequest;
 }
 
 export function VoiceButton(props: Props) {
@@ -32,6 +34,7 @@ export function VoiceButton(props: Props) {
     void voiceAvailable(probe.signal).then((value) => { if (current) setAvailable(value); });
     const control = createVoiceRecorder({
       shopperId: props.shopperId, storeId: props.storeId,
+      withShopper: props.withShopper,
       onPhase: (next) => { if (current) {
         setPhase(next); latest.current.onPhase(next);
         if (next === 'idle' || next === 'requesting') { liveText.current = null; released.current = false; latest.current.onPreview(null); }
@@ -39,9 +42,9 @@ export function VoiceButton(props: Props) {
       } },
       onRelease: () => { if (current) { released.current = true; latest.current.onPreview({ text: liveText.current, released: true }); } },
       onReply: (reply) => { if (current) { latest.current.onPreview(null); latest.current.onReply(reply); } },
-      onError: (error, transcript) => { if (current) { latest.current.onPreview(null); latest.current.onError(error, transcript); } },
+      onError: (error, transcript) => { if (current) { latest.current.onPreview(null); if (!(error instanceof SessionChangedError)) latest.current.onError(error, transcript); } },
       onUnavailable: () => { if (current) setAvailable(false); },
-      createLivePreview: () => createLiveTranscript({ shopperId: props.shopperId, onText: (text) => { if (current) {
+      createLivePreview: () => createLiveTranscript({ shopperId: latest.current.shopperId, withShopper: props.withShopper, onText: (text) => { if (current) {
         liveText.current = text;
         if (control.phase === 'recording' || released.current) latest.current.onPreview({ text, released: released.current });
       } } }),
@@ -60,7 +63,7 @@ export function VoiceButton(props: Props) {
       recorder.current = null;
       document.removeEventListener('visibilitychange', onHidden);
     };
-  }, [props.shopperId, props.storeId]);
+  }, [props.withShopper, props.storeId]);
 
   function toggle() {
     if (phase === 'recording' || phase === 'requesting') recorder.current?.stop();

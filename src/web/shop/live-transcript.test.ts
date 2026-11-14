@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createLiveTranscript, LIVE_CHUNK_SAMPLES, Pcm16Resampler, pcm16Base64 } from './live-transcript';
+import { createShopSession, saveLocalShopper } from './session';
 
 const ticket = { url: 'wss://api.elevenlabs.io/v1/speech-to-text/realtime?token=fake-single-use', model: 'scribe_v3_live', audioFormat: 'pcm_16000', sampleRate: 16000, expiresInS: 900 };
 let sockets: FakeSocket[];
@@ -56,6 +57,39 @@ async function fixture() {
   return { live, onText, context: contexts[0], socket: sockets[0] };
 }
 const messages = (socket: FakeSocket) => socket.send.mock.calls.map(([text]) => JSON.parse(text));
+
+describe('live token after a Reset', () => {
+  function storage() {
+    const values = new Map<string, string>();
+    return { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key) };
+  }
+
+  it.each([false, true])('recovers once for token 404; second missing=%s falls back without another shopper or socket', async (alwaysMissing) => {
+    vi.stubGlobal('localStorage', storage()); vi.stubGlobal('sessionStorage', storage());
+    const old = { id: 'before-reset', nickname: 'Old Goose', storeId: 'queen' as const, walletCents: 300, joined: true };
+    saveLocalShopper(old, 'q1');
+    fetchMock.mockImplementation(async (path: string) => {
+      if (path === `/api/shoppers/${old.id}`) return new Response(JSON.stringify(old));
+      if (path === '/api/shoppers') return new Response(JSON.stringify({ ...old, id: 'new-shopper', nickname: 'New Maple', walletCents: 2000 }));
+      return path.endsWith(old.id) || alwaysMissing ? new Response(JSON.stringify({ error: 'unknown_shopper' }), { status: 404 }) : new Response(JSON.stringify(ticket));
+    });
+    const changed = vi.fn(); const session = createShopSession('queen', 'q1', changed); await session.load();
+    const onText = vi.fn();
+    const live = createLiveTranscript({ shopperId: old.id, withShopper: session.run, onText })!;
+    live.attachStream(stream);
+    for (let index = 0; index < 60; index++) await Promise.resolve();
+    expect(fetchMock.mock.calls.filter(([path]) => path === '/api/shoppers')).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([path]) => path.startsWith('/api/voice/token')).map(([path]) => path)).toEqual([
+      '/api/voice/token?shopperId=before-reset', '/api/voice/token?shopperId=new-shopper',
+    ]);
+    expect(changed.mock.calls.filter(([, reason]) => reason === 'reset')).toHaveLength(1);
+    expect(session.shopper).toMatchObject({ id: 'new-shopper', nickname: 'New Maple', walletCents: 2000 });
+    expect(sockets).toHaveLength(alwaysMissing ? 0 : 1);
+    if (!alwaysMissing) { sockets[0].message({ message_type: 'partial_transcript', text: 'One coffee' }); expect(onText).toHaveBeenLastCalledWith('One coffee'); }
+    expect(stopTrack).not.toHaveBeenCalled();
+    live.cancel();
+  });
+});
 
 describe('16 kHz PCM encoding', () => {
   it.each([44_100, 48_000, 16_000])('resamples a second at actual %i Hz to exactly 16000 samples', (sampleRate) => {

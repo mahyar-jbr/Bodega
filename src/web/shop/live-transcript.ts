@@ -1,4 +1,6 @@
 import type { VoicePreview } from './voice';
+import { ApiError } from '../ui/api';
+import type { ShopperRequest } from './session';
 
 export const LIVE_SAMPLE_RATE = 16_000;
 export const LIVE_CHUNK_SAMPLES = 1_600;
@@ -49,7 +51,7 @@ export function pcm16Base64(samples: Int16Array): string {
 }
 
 /** Optional, display-only preview. No transcript is sent to our app or persisted. */
-export function createLiveTranscript(options: { shopperId: string; onText: (text: string | null) => void }): VoicePreview | null {
+export function createLiveTranscript(options: { shopperId: string; onText: (text: string | null) => void; withShopper?: ShopperRequest }): VoicePreview | null {
   const Context = globalThis.AudioContext ?? (globalThis as typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Context || typeof WebSocket === 'undefined') return null;
   let context: AudioContext | null = null;
@@ -124,11 +126,15 @@ export function createLiveTranscript(options: { shopperId: string; onText: (text
 
   void (async () => {
     try {
-      const response = await fetch(`/api/voice/token?shopperId=${encodeURIComponent(options.shopperId)}`, { signal: tokenRequest.signal });
-      if (!response.ok) { close(true); return; }
-      const ticket = await response.json() as { url?: unknown; sampleRate?: unknown; audioFormat?: unknown };
+      const getTicket = async (shopperId: string) => {
+        const response = await fetch(`/api/voice/token?shopperId=${encodeURIComponent(shopperId)}`, { signal: tokenRequest.signal });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) throw new ApiError(response.status, typeof payload?.error === 'string' ? payload.error : null, 'Live voice unavailable');
+        return payload as { url?: unknown; sampleRate?: unknown; audioFormat?: unknown } | null;
+      };
+      const ticket = await (options.withShopper ? options.withShopper(getTicket, tokenRequest.signal) : getTicket(options.shopperId));
       if (!active) return;
-      if (typeof ticket.url !== 'string' || !ticket.url.startsWith('wss://') || ticket.sampleRate !== LIVE_SAMPLE_RATE || ticket.audioFormat !== 'pcm_16000') {
+      if (!ticket || typeof ticket.url !== 'string' || !ticket.url.startsWith('wss://') || ticket.sampleRate !== LIVE_SAMPLE_RATE || ticket.audioFormat !== 'pcm_16000') {
         close(true); return;
       }
       // Use the single-use URL as provided. Never log it or put it in storage.

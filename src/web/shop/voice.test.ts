@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../ui/api';
 import { canRecordVoice, createVoiceRecorder, friendlyVoiceError, MAX_RECORDING_MS, MIN_RECORDING_MS, parseVoiceReply, voiceAvailable } from './voice';
+import { createShopSession, saveLocalShopper, type ShopperRequest } from './session';
 
 const payload = {
   transcript: 'One coffee please',
@@ -47,12 +48,66 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
-function fixture() {
+function fixture(withShopper?: ShopperRequest) {
   const callbacks = { onPhase: vi.fn(), onReply: vi.fn(), onError: vi.fn(), onUnavailable: vi.fn() };
-  return { ...callbacks, recorder: createVoiceRecorder({ shopperId: 'shopper-q2', storeId: 'queen', ...callbacks }) };
+  return { ...callbacks, recorder: createVoiceRecorder({ shopperId: 'shopper-q2', storeId: 'queen', ...callbacks, withShopper }) };
 }
-const flush = async () => { for (let index = 0; index < 15; index++) await Promise.resolve(); };
+const flush = async () => { for (let index = 0; index < 50; index++) await Promise.resolve(); };
 const hold = () => vi.advanceTimersByTimeAsync(MIN_RECORDING_MS + 50);
+
+function sessionStorageFixture() {
+  const data = new Map<string, string>();
+  return { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => data.set(key, value), removeItem: (key: string) => data.delete(key) };
+}
+
+describe('voice after a Reset', () => {
+  const old = { id: 'shopper-q2', nickname: 'Old Goose', storeId: 'queen' as const, walletCents: 100, joined: true };
+  const fresh = { ...old, id: 'replacement', nickname: 'New Maple', walletCents: 2000 };
+
+  async function resetFixture(alwaysMissing = false) {
+    vi.stubGlobal('localStorage', sessionStorageFixture());
+    vi.stubGlobal('sessionStorage', sessionStorageFixture());
+    saveLocalShopper(old, 'demo');
+    const uploads: FormData[] = [];
+    fetchMock.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === `/api/shoppers/${old.id}`) return new Response(JSON.stringify(old));
+      if (path === '/api/shoppers') return new Response(JSON.stringify(fresh), { status: 201 });
+      const form = init!.body as FormData; uploads.push(form);
+      return form.get('shopperId') === old.id || alwaysMissing
+        ? new Response(JSON.stringify({ error: 'unknown_shopper' }), { status: 404 })
+        : new Response(JSON.stringify(payload));
+    });
+    const changed = vi.fn();
+    const session = createShopSession('queen', 'demo', changed); await session.load();
+    return { ...fixture(session.run), uploads, session, changed };
+  }
+
+  it.each(['audio/webm;codecs=opus', 'audio/mp4'])('retries the exact complete %s recording once without asking for the microphone again', async (mime) => {
+    FakeRecorder.isTypeSupported.mockImplementation((type) => type === mime);
+    const f = await resetFixture();
+    await f.recorder.start(); await hold(); f.recorder.stop(); await flush();
+    expect(f.uploads).toHaveLength(2);
+    expect(f.uploads.map((form) => form.get('shopperId'))).toEqual([old.id, fresh.id]);
+    const files = f.uploads.map((form) => form.get('audio') as File);
+    expect(await files[0].arrayBuffer()).toEqual(await files[1].arrayBuffer());
+    expect(files[0].type).toBe(mime); expect(files[1].name).toBe(mime.includes('mp4') ? 'voice.m4a' : 'voice.webm');
+    expect(getUserMedia).toHaveBeenCalledOnce(); expect(recordings).toHaveLength(1);
+    expect(f.onReply).toHaveBeenCalledOnce(); expect(f.onError).not.toHaveBeenCalled();
+    expect(f.session.shopper).toMatchObject({ id: fresh.id, nickname: fresh.nickname, walletCents: 2000 });
+    expect(f.changed.mock.calls.filter(([, reason]) => reason === 'reset')).toHaveLength(1);
+    expect(f.recorder.phase).toBe('idle');
+  });
+
+  it('surfaces the second voice 404 and stops after one replacement and retry', async () => {
+    const f = await resetFixture(true);
+    await f.recorder.start(); await hold(); f.recorder.stop(); await flush();
+    expect(f.uploads).toHaveLength(2);
+    expect(f.onReply).not.toHaveBeenCalled();
+    expect(f.onError).toHaveBeenCalledWith(expect.objectContaining({ code: 'unknown_shopper' }), undefined);
+    expect(fetchMock.mock.calls.filter(([path]) => path === '/api/shoppers')).toHaveLength(1);
+    expect(getUserMedia).toHaveBeenCalledOnce();
+  });
+});
 
 describe('voice recording', () => {
   it('requests the mic only on start, uploads multipart after final data, and preserves the full ChatReply', async () => {

@@ -69,6 +69,17 @@ export function createApiRouter({ store, agent, db, opsAutomation, flash, resetD
     res.status(201).json(shopper);
   });
 
+  // Cheap identity validation for phone tabs surviving an ops Reset; no agent call.
+  router.get('/shoppers/:id', async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    const id = z.string().trim().min(1).max(200).safeParse(req.params.id);
+    if (!id.success) return invalid(res);
+    const shopper = await store.shopper(id.data);
+    if (!shopper) return res.status(404).json({ error: 'unknown_shopper' });
+    const { id: shopperId, nickname, storeId, walletCents } = shopper;
+    res.json({ id: shopperId, nickname, storeId, walletCents });
+  });
+
   router.post('/chat', async (req, res) => {
     const input = chatSchema.safeParse(req.body);
     if (!input.success) return invalid(res);
