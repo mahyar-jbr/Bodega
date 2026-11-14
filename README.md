@@ -1,10 +1,31 @@
 # Bodega
 
+<p align="center">
+  <img src="docs/media/hero.png" width="100%" alt="Bodega's big screen during a live learning cycle: three store tiles, the learning panel testing a new guardrail on 120 held-out cases with green dots for scams stopped and blue for honest customers served, and the live feed of cons">
+</p>
+
 **Herd immunity for AI store agents.** A con that works once at one store is blocked at every store within seconds, after the fix is proven on 120 held-out cases with the same model, while honest customers still get served. The memory behind it is governed: who reads it, how long it lives and how it's taken back are rules, not promises.
 
 **Problem statement:** Memory You Can Govern (statement 2 at Agents in Context Toronto).
 
 [Live demo](https://bodega-dxwd.onrender.com) · [1-minute video]([video link]) · Built in one day at Agents in Context Toronto (MongoDB), Nov 14, 2026, by Mahyar Jaberi and Kasra Bashizadeh ([what we built at the event](#built-at-the-event)).
+
+## See it
+
+<p align="center">
+  <img src="docs/media/learning-loop.gif" width="100%" alt="The learning loop from the live app: the held-out test dots fill, every store turns immune, then a rollback makes every store forget the rule">
+</p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/media/immune.png" alt="Policy v2 live at every store: Queen St and Yonge St immune in 0.3 seconds, Scarborough in 0.6, with 60 of 60 held-out scams stopped and 58 of 60 honest customers served"></td>
+    <td width="50%"><img src="docs/media/rollback.png" alt="Policy v2 taken back at every store: each store forgets it in 0.3 seconds, back on v0 with learning paused"></td>
+  </tr>
+  <tr>
+    <td>Every store immune, 0.3 to 0.6 s in this run.</td>
+    <td>Roll back: every store forgets it in 0.3 s, and learning pauses.</td>
+  </tr>
+</table>
 
 ## What it does
 
@@ -17,6 +38,13 @@ Shop agents like this get talked into giving stock away: fake codes, fake member
 - **It learns, carefully.** A learner writes a new guardrail version (rules over facts, never over phrases). A gate tests it on 120 held-out cases it never saw, half of them honest customers, with the same shopkeeper model and prompt. It goes live only if scams drop and honest customers are still served.
 - **Every store becomes immune.** Each store picks up the new version on its own and reports how long that took.
 - **Any rule can be taken back.** One tap rolls a version back, and every store forgets it and reports how long that took.
+
+<table>
+  <tr>
+    <td width="34%"><img src="docs/media/phone-shop.png" alt="The Queen St shop on a phone: the shopkeeper greets Lucky Fox 52, sells one iced tea for $2.50 and prints receipt Q-1013, with the wallet at $17.50 and Policy v0 in the header"></td>
+    <td width="66%"><img src="docs/media/stage.png" alt="The presenting laptop's stage view: the big screen with three conned or open stores, the tricks tried so far and the live feed, beside a phone-size shop window with four shopper tabs"><br><br>A shop on a phone (left), and the stage view the room watches: the big screen beside a live shop window (above).</td>
+  </tr>
+</table>
 
 ## Results
 
@@ -59,6 +87,10 @@ Per category, from `npm run compare -- 0 1` (6 cases each):
 
 **Money under load.** A flash sale on the live app: 100 bots raced for 10 hoodies at once, and exactly 10 sold. Stock went from 10 to 0, every wallet matches its ledger and none went negative, in 36 seconds, with every order one Atlas transaction.
 
+<p align="center">
+  <img src="docs/media/flash-sale.png" width="100%" alt="The flash sale at Queen St on the big screen: 100 shopper dots with 10 lit, 10 hoodies all sold, 10 sold and 0 oversold, and a note that every order is one Atlas transaction and every wallet matches its ledger">
+</p>
+
 **A store that was offline catches up.** Take a store offline, promote a version, and bring it back: it applies the version it missed and reports when, measured from the promotion. Time to immunity counts only the stores that were online.
 
 ## Memory you can govern
@@ -79,6 +111,17 @@ What Bodega remembers, and the rule for each:
 - **A person can approve before anything goes live.** With approval required (off by default), a version that passes the gate waits for an operator: approved, it rolls out as usual; rejected, it never goes live.
 - **One shopper can be forgotten.** On request, their chats are deleted and their incidents anonymised (no shopper id, nickname or conversation), while the cons and rules they taught stay. `forget_log` keeps counts only.
 - **Every con has an audit trail.** For one con: the ledger entries it caused, the auditor's violations, how the con memory grouped it, and the rule, version and gate result that block it now.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/media/memory-panel.png" alt="The memory panel: the three memory rules, the TTL index line read from Atlas (raw chats expire 24 hours after the last message), and the cons as summaries with the store that first saw each"></td>
+    <td width="50%"><img src="docs/media/audit-trail.png" alt="The audit trail for one con, a refund claimed for an order that never existed: grouped by Atlas Agent Memory with a 0.91 match, three ledger entries with their losses and violations, and nothing blocking it after the rollback"></td>
+  </tr>
+  <tr>
+    <td>What Bodega remembers, and the rules for it.</td>
+    <td>The audit trail for one con, from the ledger to the rule.</td>
+  </tr>
+</table>
 
 ## How it works
 
