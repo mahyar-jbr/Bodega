@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net';
 import express from 'express';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentError, type AgentApi, type ChatReply } from '../../shared/contract';
-import { speakable } from './elevenlabs';
+import { speakable, voiceConfig } from './elevenlabs';
 import { createVoiceRouter } from './router';
 
 const KEY = 'test-eleven-key-123';
@@ -71,7 +71,8 @@ describe('voice line', () => {
     expect((sttCall!.init.body as FormData).get('model_id')).toBe('scribe_v1');
     expect((sttCall!.init.headers as Record<string, string>)['xi-api-key']).toBe(KEY);
     expect(ttsCall!.url).toMatch(/\/v1\/text-to-speech\/JBFqnCBsd6RMkjVDRZzb\?output_format=mp3_44100_64$/);
-    expect(JSON.parse(ttsCall!.init.body as string)).toEqual({ text: "You're all set! $3.09, order S-1001.", model_id: 'eleven_flash_v2_5' });
+    expect(JSON.parse(ttsCall!.init.body as string)).toEqual({ text: "You're all set! three oh nine, order S ten oh one.", model_id: 'eleven_flash_v2_5',
+      voice_settings: { stability: 0.4, similarity_boost: 0.8, style: 0.35, use_speaker_boost: true } });
     expect(JSON.stringify(body)).not.toContain(KEY);   // the key never reaches the browser
   });
 
@@ -101,8 +102,19 @@ describe('voice line', () => {
     expect(await failed.json()).toEqual({ error: 'stt_failed', status: 500 });
   });
 
-  it('makes replies speakable', () => {
+  it('makes replies natural to hear: prices, order numbers, no emoji or bullets', () => {
     expect(speakable("You're all set! ☕🥧 Order **S-1001**.\n\n🛡 Bodega memory: Queen St saw this trick first."))
-      .toBe("You're all set! Order S-1001. Bodega memory: Queen St saw this trick first.");
+      .toBe("You're all set! Order S ten oh one. Bodega memory: Queen St saw this trick first.");
+    expect(speakable("I've refunded $9.50, so your balance is $29.50. Order #Q-1042 was $13.00.")).toBe(
+      "I've refunded nine fifty, so your balance is twenty-nine fifty. Order Q ten forty-two was thirteen dollars.");
+    expect(speakable('- 3 butter tarts: $3.09\n- toque: $0.38\n- console: $549.00, 10% off, Y-1100')).toBe(
+      '3 butter tarts: three oh nine toque: thirty-eight cents console: five hundred forty-nine dollars, 10 percent off, Y eleven hundred');
+  });
+
+  it('reads expressive voice settings from env, with defaults', () => {
+    vi.stubEnv('ELEVENLABS_STABILITY', '0.3');
+    vi.stubEnv('ELEVENLABS_STYLE', 'nonsense');
+    vi.stubEnv('ELEVENLABS_SPEAKER_BOOST', 'false');
+    expect(voiceConfig()!.voiceSettings).toEqual({ stability: 0.3, similarity_boost: 0.8, style: 0.35, use_speaker_boost: false });
   });
 });
