@@ -59,6 +59,7 @@ export function createConMemory({ db, mode = conMemoryMode(), onNewCon }: ConMem
   const cons = db.collection<ConDoc>(CONS);
   const incidents = db.collection<IncidentDoc>(INCIDENTS);
   const firstSeen = new Map<string, { storeId: StoreId; at: number }>();
+  const unknown = new Set<string>();
   const queues = new Map<string, Promise<unknown>>();
 
   function serial<T>(key: string, fn: () => Promise<T>): Promise<T> {
@@ -174,6 +175,16 @@ export function createConMemory({ db, mode = conMemoryMode(), onNewCon }: ConMem
       });
     },
 
+    /** Loads where these cons were first seen when this process doesn't know yet: a con filed by
+     *  another instance (one still draining after a deploy) or before this process started. */
+    async ensureFirstSeen(conIds: string[]): Promise<void> {
+      const missing = [...new Set(conIds)].filter((id) => !firstSeen.has(id) && !unknown.has(id));
+      if (missing.length === 0) return;
+      const found = await cons.find({ _id: { $in: missing } }, { projection: { firstSeenStore: 1, firstSeenAt: 1 } }).toArray();
+      for (const con of found) firstSeen.set(con._id, { storeId: con.firstSeenStore, at: con.firstSeenAt.getTime() });
+      for (const id of missing) if (!firstSeen.has(id)) unknown.add(id);   // e.g. 'hand-written': never a real con
+    },
+
     /** The store that first saw any of these cons (the earliest), for "Queen St saw that one first". */
     firstSeenStore(conIds: string[]): StoreId | null {
       let best: { storeId: StoreId; at: number } | null = null;
@@ -192,6 +203,7 @@ export function createConMemory({ db, mode = conMemoryMode(), onNewCon }: ConMem
     /** After a reset: a new epoch starts with an empty con memory. */
     reset() {
       firstSeen.clear();
+      unknown.clear();
     },
   };
 }

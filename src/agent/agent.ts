@@ -115,6 +115,7 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
         let result;
         // The version this store has applied right now: after a promotion it may lag for a moment.
         const version = runtimes?.versionFor(storeId) ?? V0;
+        if (version.rules.length) await conMemory?.ensureFirstSeen(version.rules.flatMap((r) => r.cons)).catch(() => {});
         try {
           result = await runShopkeeper({ store, storeId, shopperId, turns: [text], version, history, conversationId,
             firstSeenStore: (conIds) => conMemory?.firstSeenStore(conIds) ?? null });

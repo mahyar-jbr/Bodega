@@ -99,6 +99,16 @@ describe.skipIf(!uri)('governance on Atlas', () => {
     await agent.setApprovalRequired!(false);
   }, 40_000);
 
+  it('knows where a con was first seen even when another process filed it', async () => {
+    const { createConMemory } = await import('./memory/con-memory');
+    const memory = createConMemory({ db, mode: 'local' });
+    await memory.start();
+    await db.collection('cons').insertOne({ _id: 'c:9:elsewhere' as never, firstSeenStore: 'queen', firstSeenAt: new Date(), epoch: 9 });
+    expect(memory.firstSeenStore(['c:9:elsewhere'])).toBeNull();          // filed after this process started
+    await memory.ensureFirstSeen(['c:9:elsewhere', 'hand-written']);
+    expect(memory.firstSeenStore(['hand-written', 'c:9:elsewhere'])).toBe('queen');
+  }, 30_000);
+
   it('forgets one shopper: chats deleted, incidents anonymised, money and rules kept, no ids logged', async () => {
     const store = new MemoryStore();
     const gone = await store.createShopper({ storeId: 'queen', kind: 'crowd', nickname: 'Lucky Raccoon 50' });
