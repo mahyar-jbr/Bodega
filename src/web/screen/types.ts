@@ -70,7 +70,7 @@ export interface LearningData {
   phase: LearningPhase;
   store: StoreKey;                       // where the con was first seen
   incident: { summary: string; detail: string; lostCents: number };
-  guardrail: { version: number; rules: string[] };   // rule titles, in plain words
+  guardrail: { version: number; rules: string[]; newRules?: number; parentVersion?: number; parentRules?: number };   // rule titles, new ones first
   test: TestProgress;
   scamsTotal: number; honestTotal: number;
   settingsHash: string;                  // same model, same prompt

@@ -71,11 +71,11 @@ export function LearningPanel({ data }: { data: LearningData }) {
         <div className="bs-learn-col" data-step={steps[1]}>
           <div className="stage-label bs-col-label">New guardrail, in plain words</div>
           {data.guardrail.rules.length === 0 ? <div className="stage-body bs-quiet">{data.phase === 'incident' ? 'Remembering the con\u2026' : 'Opus is writing the next guardrail\u2026'}</div>
-            : data.guardrail.rules.slice(0, 2).map((r) => <div key={r} className="stage-body bs-rule">{r}</div>)}
+            : data.guardrail.rules.slice(0, 2).map((r, i) => (
+              <div key={r} className="stage-body bs-rule" data-new={(data.guardrail.parentRules ?? 0) > 0 && i < (data.guardrail.newRules ?? 0) ? 'true' : undefined}>{r}</div>
+            ))}
           {data.guardrail.rules.length > 0 && (
-            <div className="stage-label bs-quiet" style={{ marginTop: 6 }}>
-              Policy v{data.guardrail.version}{data.guardrail.rules.length > 2 ? `, and ${data.guardrail.rules.length - 2} more` : ''}, every store
-            </div>
+            <div className="stage-label bs-quiet" style={{ marginTop: 6 }}>{buildsOn(data.guardrail)}</div>
           )}
         </div>
         <div className="bs-learn-col" data-step={steps[2]}>
@@ -312,4 +312,16 @@ export function AuditPanel({ audit, index, count }: { audit: AuditData; index: n
       </div>
     </section>
   );
+}
+
+/** "Policy v2 adds 1 rule to v1's 3, every store", or for a first version "Policy v1: 3 rules, every store". */
+function buildsOn(g: LearningData['guardrail']): string {
+  const plural = (n: number) => `${n} ${n === 1 ? 'rule' : 'rules'}`;
+  if (g.parentVersion && g.parentRules) {
+    const added = g.newRules ?? 0;
+    return added > 0
+      ? `Policy v${g.version} adds ${plural(added)} to v${g.parentVersion}'s ${g.parentRules}, every store`
+      : `Policy v${g.version} rewrites v${g.parentVersion}'s ${plural(g.parentRules)}, every store`;
+  }
+  return `Policy v${g.version}: ${plural(g.rules.length)}, every store`;
 }

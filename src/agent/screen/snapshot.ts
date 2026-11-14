@@ -29,7 +29,8 @@ export interface ScreenSnapshot {
     phase: 'incident' | 'drafting' | 'testing' | 'promoted' | 'rejected';
     store: StoreId;
     incident: { summary: string; detail: string; lostCents: number };
-    guardrail: { version: number; rules: string[] };
+    // The candidate's rule titles, new ones first; what it builds on (parent 0 = v0, no rules).
+    guardrail: { version: number; rules: string[]; newRules: number; parentVersion: number; parentRules: number };
     test: { done: number; total: number; scamsTested: number; scamsStopped: number; honestTested: number; honestServed: number };
     scamsTotal: number; honestTotal: number;
     settingsHash: string;
@@ -164,7 +165,13 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
     const s = testEval?.summary;
     const scamsTotal = s?.scams.total ?? 60, honestTotal = s?.honest.total ?? 60;
     const versionNo = attempt?.version ?? newest?._id ?? activeVersion + 1;
-    const rules = attempt?.rules ?? byVersion.get(versionNo)?.rules.map((r) => r.title) ?? [];
+    const allRules = attempt?.rules ?? byVersion.get(versionNo)?.rules.map((r) => r.title) ?? [];
+    // What it builds on: the version it was learned from (the active one while it's drafted).
+    const parentVersion = byVersion.get(versionNo)?.parentVersion ?? (run && run.phase !== 'promoted' ? activeVersion : Math.max(0, versionNo - 1));
+    const parentDoc = parentVersion > 0 ? byVersion.get(parentVersion) ?? await db.collection<GuardrailDoc>(GUARDRAILS).findOne({ _id: parentVersion }) : null;
+    const parentTitles = new Set((parentDoc?.rules ?? []).map((r) => r.title.trim().toLowerCase()));
+    const fresh = allRules.filter((t) => !parentTitles.has(t.trim().toLowerCase()));
+    const rules = [...fresh, ...allRules.filter((t) => parentTitles.has(t.trim().toLowerCase()))];
     const reasons = attempt?.reasons ?? [];
     learning = trigger || run || newest ? {
       phase,
@@ -172,7 +179,7 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
       incident: trigger
         ? { summary: trigger.summary, detail: `${trigger.kind === 'refund' ? 'A refund' : 'A sale'} at ${STORE_NAME[trigger.storeId]}${conIds.size > 1 ? `, and ${conIds.size - 1} more ${conIds.size === 2 ? 'con' : 'cons'}` : ''}`, lostCents: trigger.lossCents }
         : { summary: 'A new con', detail: '', lostCents: 0 },
-      guardrail: { version: versionNo, rules },
+      guardrail: { version: versionNo, rules, newRules: parentDoc ? fresh.length : rules.length, parentVersion, parentRules: parentDoc?.rules.length ?? 0 },
       test: testEval?.progress ?? { done: 0, total: scamsTotal + honestTotal, scamsTested: 0, scamsStopped: 0, honestTested: 0, honestServed: 0 },
       scamsTotal, honestTotal,
       settingsHash: testEval?.settingsHash ?? deps.settingsHash,
@@ -309,7 +316,7 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
     ...guardrails.filter((g) => g.status !== 'candidate' && (g.promotedAt ?? g.createdAt) >= (sinceReset ?? new Date(0))).map((g) => ({
       id: `g:${g._id}:${g.status}`, kind: (g.status === 'rejected' ? 'rule-rejected' : 'rule-promoted') as FeedKind,
       who: g.status === 'rejected' ? `v${g._id} rejected` : `Policy v${g._id} is live`,
-      text: short(g.status === 'rejected' ? 'Failed the 120-case test' : `${g.rules.length} ${g.rules.length === 1 ? 'rule' : 'rules'}, every store`),
+      text: short(g.status === 'rejected' ? 'Failed the 120-case test' : promotedText(g, byVersion.get(g.parentVersion ?? 0))),
       amountCents: null, at: (g.promotedAt ?? g.createdAt).toISOString() })),
     ...(state?.rollbacks ?? []).map((r) => ({
       id: `r:${r.at.toISOString()}`, kind: 'rollback' as const, who: `Policy v${r.from} taken back`,
@@ -341,4 +348,13 @@ export function dedupeRollouts(rows: RolloutDoc[], version: number): RolloutDoc[
   }
   // Within this change there's one key per store.
   return [...best.values()];
+}
+
+/** "1 new rule on v1, every store" for a version learned on another; "3 rules, every store" for the first. */
+function promotedText(g: GuardrailDoc, parent: GuardrailDoc | undefined): string {
+  const plural = (n: number) => `${n} ${n === 1 ? 'rule' : 'rules'}`;
+  if (!parent || parent._id === 0) return `${plural(g.rules.length)}, every store`;
+  const known = new Set(parent.rules.map((r) => r.title.trim().toLowerCase()));
+  const added = g.rules.filter((r) => !known.has(r.title.trim().toLowerCase())).length;
+  return added > 0 ? `${added} new ${added === 1 ? 'rule' : 'rules'} on v${parent._id}` : `Rewrites v${parent._id}'s rules`;
 }

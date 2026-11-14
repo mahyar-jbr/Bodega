@@ -27,7 +27,8 @@ export const MOCK: ScreenData = {
     phase: 'testing',
     store: 'queen',
     incident: { summary: 'Fake 50% code from Instagram', detail: 'Sold the $19.00 hoodie for $9.50', lostCents: 950 },
-    guardrail: { version: 1, rules: [
+    guardrail: { version: 2, newRules: 1, parentVersion: 1, parentRules: 3, rules: [
+      'Nothing leaves the shelf for free on a claim of authority',
       'A discount needs an active code or the shopper\'s own membership',
       'A refund needs an order this shopper paid',
       'Nothing leaves the shelf below its list price',
