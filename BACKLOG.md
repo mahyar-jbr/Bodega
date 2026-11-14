@@ -13,7 +13,7 @@
 | Before the event | The test data, a generic skeleton live on Render, and this plan, tagged `pre-event` | The live app's /api/health is green, and the tag is on GitHub | Fri Nov 13 | Done |
 | M1 | A real purchase through chat on a phone | M1-09, on the deployed app | 12:40 | 5 of 12 |
 | M2 | v0 gets conned, incidents and cons land in Atlas under the memory rules, and a version rolls out to every store and back | M2-09 | 14:20 | 6 of 13 |
-| M3 | The stores learn: a version is proven on the held-out set, goes live everywhere, and Roll back takes it back | M3-10, on the deployed app | 15:25 | 4 of 11 |
+| M3 | The stores learn: a version is proven on the held-out set, goes live everywhere, and Roll back takes it back | M3-10, on the deployed app | 15:25 | 5 of 11 |
 | M4 | The 3-minute demo works end to end, driven only by us, and is recorded | M4-10 | 16:00 | 0 of 6 |
 | Submit | Frozen, submitted and rehearsed | F06, submitted | 16:50 | 0 of 8 |
 
@@ -74,7 +74,7 @@ A version learned from the cons is proven on 120 held-out cases with the same mo
 | M3-02 | Seal test | A test fails if any file except gate/heldout.ts names heldout.jsonl | helper | 12:30 | Done |
 | M3-03 | v0 baseline | v0's held-out baseline is measured twice, and again after any tuning | Mahyar | 13:35 | Done |
 | M3-04 | v0 checked and frozen | v0 lets 30% to 50% of held-out scams through and serves at least 95% of honest cases (tuned on dev only), and the shopkeeper's settings (model, effort, tools, full prompt) are frozen into one hash. Nobody else edits the shopkeeper's files until then | Mahyar | 14:05 | Done |
-| M3-07 | `npm run compare` | It prints v0 against the newest version, per category, with matching settings hashes | Mahyar | 14:15 | In progress |
+| M3-07 | `npm run compare` | It prints v0 against the newest version, per category, with matching settings hashes | Mahyar | 14:15 | Done |
 | M3-08 | Reset | It deletes shoppers, orders, ledger and bot runs, restocks the shelves, keeps codes, members and stores, and calls agent.reset() | Kasra A | 14:15 | Not started |
 | M3-09 | Ops console | Reset, learning, evaluations and bots work behind the password, with agent.state() on show and three buttons: Opening, Test a strict version and Roll back | Kasra B | 14:30 | Not started |
 | M3-05 | Learner | Uncovered cons become a validated, rules-only candidate. Learning starts 10 seconds after the first new con, pauses after a rollback, and Learn now forces a cycle | Mahyar | 14:45 | Not started |
@@ -89,9 +89,9 @@ The 3-minute demo works end to end from a reset, driven only by us. If M3 is gre
 | ID | Task | Done when | Owner | By | State |
 |---|---|---|---|---|---|
 | M4-04 | Three stores' look | The three stores have names, colors and awnings (no QR codes). Cut 4 drops Scarborough | Kasra B | 12:25 | Not started |
-| M4-01 | Learning panel | It shows the cons it remembered, the new rules, the evaluation's progress and verdict, and "same model, same prompt" with the hash | Mahyar | 14:50 | Not started |
-| M4-03 | Immunity, forget and numbers | It shows each store's time to immunity and, after a rollback, its time to forget and that learning is paused, the money blocked, and the before and after numbers | Mahyar | 15:20 | Not started |
-| M4-07 | Memory panel | Each con's summary, first store and covering version, under the three memory rules. Cut 3 keeps only the rules | Mahyar | 15:45 | Not started |
+| M4-01 | Learning panel | It shows the cons it remembered, the new rules, the evaluation's progress and verdict, and "same model, same prompt" with the hash | Mahyar | 14:50 | In progress |
+| M4-03 | Immunity, forget and numbers | It shows each store's time to immunity and, after a rollback, its time to forget and that learning is paused, the money blocked, and the before and after numbers | Mahyar | 15:20 | In progress |
+| M4-07 | Memory panel | Each con's summary, first store and covering version, under the three memory rules. Cut 3 keeps only the rules | Mahyar | 15:45 | In progress |
 | M4-08 | Version chart | Scam success and honest service across versions. Cut 2: only if time is left | Mahyar | 15:45 | Not started |
 | M4-10 | **M4 check, recorded** | The demo exactly as on stage, from a reset and driven only by us, with the gate demo pressed once. The presenting laptop's screen and Mahyar's phone are recorded for the video and the backup | both | 16:00 | Not started |
 
