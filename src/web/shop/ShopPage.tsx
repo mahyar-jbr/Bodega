@@ -1,14 +1,539 @@
+import { type CSSProperties, type FormEvent, type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
+import type { ChatReply, Shopper as ContractShopper } from '../../shared/contract';
+import { ApiError, apiJson } from '../ui/api';
+import { AwningMark } from '../ui/AwningMark';
+import { Icon } from '../ui/Icon';
+import { isStoreKey, STORES, type StoreKey } from '../ui/stores';
+import '../ui/theme.css';
+import './shop.css';
 
-// Placeholder for the phone shop (/s/:storeId).
+const MAX_MESSAGE_LENGTH = 300;
+const QUICK_REPLIES = ["What's good today?", 'Use a code', 'Check out'];
+
+type Shopper = Pick<ContractShopper, 'id' | 'nickname' | 'storeId' | 'walletCents'>;
+
+type LocalShopper = Shopper & { joined: boolean };
+
+type ChatAction = ChatReply['actions'][number];
+
+type Message = {
+  id: string;
+  from: 'shopkeeper' | 'customer' | 'system';
+  text: string;
+  time: string;
+  actions?: ChatAction[];
+  blocked?: ChatReply['blocked'];
+  policyVersion?: number;
+  error?: boolean;
+};
+
+type PolicyState = {
+  version: number;
+  appliedAt: Date | null;
+};
+
+const pendingShoppers = new Map<StoreKey, Promise<LocalShopper>>();
+
+function storageKey(store: StoreKey) {
+  return `bodega:shopper:${store}`;
+}
+
+function parseShopper(value: unknown, store: StoreKey): Shopper {
+  if (!value || typeof value !== 'object') throw new Error('The shopper response was incomplete.');
+  const candidate = value as Record<string, unknown>;
+  if (
+    typeof candidate.id !== 'string'
+    || typeof candidate.nickname !== 'string'
+    || typeof candidate.walletCents !== 'number'
+  ) {
+    throw new Error('The shopper response was incomplete.');
+  }
+  return {
+    id: candidate.id,
+    nickname: candidate.nickname,
+    storeId: store,
+    walletCents: candidate.walletCents,
+  };
+}
+
+function readLocalShopper(store: StoreKey): LocalShopper | null {
+  try {
+    const saved = localStorage.getItem(storageKey(store));
+    if (!saved) return null;
+    const payload = JSON.parse(saved) as unknown;
+    const shopper = parseShopper(payload, store);
+    return { ...shopper, joined: Boolean((payload as { joined?: unknown }).joined) };
+  } catch {
+    try {
+      localStorage.removeItem(storageKey(store));
+    } catch {
+      // Storage is optional; continue with an in-memory shopper.
+    }
+    return null;
+  }
+}
+
+function saveLocalShopper(shopper: LocalShopper) {
+  try {
+    localStorage.setItem(storageKey(shopper.storeId), JSON.stringify(shopper));
+  } catch {
+    // A private browser can deny storage; the in-memory session still works.
+  }
+}
+
+function ensureShopper(store: StoreKey): Promise<LocalShopper> {
+  const saved = readLocalShopper(store);
+  if (saved) return Promise.resolve(saved);
+  const active = pendingShoppers.get(store);
+  if (active) return active;
+
+  const request = apiJson<unknown>('/api/shoppers', {
+    method: 'POST',
+    body: JSON.stringify({ storeId: store }),
+  }).then((payload) => {
+    const shopper = { ...parseShopper(payload, store), joined: false };
+    saveLocalShopper(shopper);
+    pendingShoppers.delete(store);
+    return shopper;
+  }).catch((error: unknown) => {
+    pendingShoppers.delete(store);
+    throw error;
+  });
+  pendingShoppers.set(store, request);
+  return request;
+}
+
+function parseChatReply(value: unknown): ChatReply {
+  if (!value || typeof value !== 'object') throw new Error('The shopkeeper response was incomplete.');
+  const payload = value as Record<string, unknown>;
+  if (typeof payload.reply !== 'string' || typeof payload.walletCents !== 'number') {
+    throw new Error('The shopkeeper response was incomplete.');
+  }
+  return {
+    reply: payload.reply,
+    walletCents: payload.walletCents,
+    actions: Array.isArray(payload.actions) ? payload.actions as ChatAction[] : [],
+    blocked: Array.isArray(payload.blocked) ? payload.blocked as ChatReply['blocked'] : [],
+  };
+}
+
+function parsePolicy(value: unknown, storeId: StoreKey): PolicyState | null {
+  if (!value || typeof value !== 'object') return null;
+  const outer = value as Record<string, unknown>;
+  const payload = outer.state && typeof outer.state === 'object' ? outer.state as Record<string, unknown> : outer;
+  if (!Array.isArray(payload.stores)) return null;
+  const store = payload.stores.find((item) => item && typeof item === 'object' && (item as Record<string, unknown>).storeId === storeId);
+  if (!store || typeof store !== 'object') return null;
+  const entry = store as Record<string, unknown>;
+  if (typeof entry.appliedVersion !== 'number') return null;
+  const appliedAt = typeof entry.appliedAt === 'string' ? new Date(entry.appliedAt) : null;
+  return { version: entry.appliedVersion, appliedAt: appliedAt && !Number.isNaN(appliedAt.valueOf()) ? appliedAt : null };
+}
+
+function makeId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function currentTime() {
+  return new Intl.DateTimeFormat('en-CA', { hour: 'numeric', minute: '2-digit', hour12: true })
+    .format(new Date())
+    .replace(/\s[ap]\.m\.$/i, '');
+}
+
+function formatMoney(cents: number) {
+  return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(cents / 100);
+}
+
+function friendlyChatError(error: unknown) {
+  if (error instanceof ApiError) {
+    if (error.status === 429 || error.code === 'rate_limited') return 'Slow down a little and try that again.';
+    if (error.status === 404 || error.code === 'unknown_shopper') return 'I lost your shopper tab. Refresh and I’ll get you back in.';
+    if (error.status === 400 || error.code === 'too_long') return 'That message is a little long. Keep it under 300 characters.';
+    if (error.status === 503 || error.code === 'store_offline' || error.code === 'unavailable') {
+      return 'The store is closed for a moment. Try again shortly.';
+    }
+  }
+  return 'The store is closed for a moment. Try again shortly.';
+}
+
+function greeting(nickname: string) {
+  return `Hey ${nickname}, welcome in! Coffee’s fresh and the butter tarts just came out. What can I grab you?`;
+}
+
 export default function ShopPage() {
   const { storeId } = useParams();
+  const store = isStoreKey(storeId) ? storeId : null;
+  const [shopper, setShopper] = useState<LocalShopper | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [policy, setPolicy] = useState<PolicyState>({ version: 0, appliedAt: null });
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const policyVersionRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!store) return;
+    let current = true;
+    policyVersionRef.current = null;
+    setPolicy({ version: 0, appliedAt: null });
+    setShopper(null);
+    setMessages([]);
+    setLoadError(false);
+    ensureShopper(store).then((next) => {
+      if (!current) return;
+      setShopper(next);
+      if (next.joined) {
+        setMessages((existing) => existing.length ? existing : [{
+          id: makeId(),
+          from: 'shopkeeper',
+          text: greeting(next.nickname),
+          time: currentTime(),
+        }]);
+      }
+    }).catch(() => {
+      if (current) setLoadError(true);
+    });
+    return () => { current = false; };
+  }, [retry, store]);
+
+  useEffect(() => {
+    if (!shopper) return;
+    const events = new EventSource(`/api/events?topics=${encodeURIComponent(`shopper:${shopper.id}`)}`);
+    events.onmessage = ({ data }) => {
+      try {
+        const event = JSON.parse(data) as { coll?: unknown; doc?: unknown };
+        if (event.coll !== 'shoppers' || !event.doc || typeof event.doc !== 'object') return;
+        const doc = event.doc as Record<string, unknown>;
+        if (doc.id !== shopper.id || typeof doc.walletCents !== 'number') return;
+        setShopper((current) => {
+          if (!current) return current;
+          const next = { ...current, walletCents: doc.walletCents as number };
+          saveLocalShopper(next);
+          return next;
+        });
+      } catch {
+        // Heartbeats and future event shapes do not affect the shop session.
+      }
+    };
+    return () => events.close();
+  }, [shopper?.id]);
+
+  useEffect(() => {
+    if (!store) return;
+    const currentStore = store;
+    let current = true;
+    async function refreshPolicy() {
+      try {
+        const next = parsePolicy(await apiJson<unknown>('/api/agent/state'), currentStore);
+        if (!current || !next) return;
+        const previous = policyVersionRef.current;
+        policyVersionRef.current = next.version;
+        setPolicy(next);
+        if (previous !== null && previous !== next.version && shopper?.joined) {
+          setMessages((messages) => [...messages, {
+            id: makeId(),
+            from: 'system',
+            text: `Policy v${next.version} arrived.`,
+            time: currentTime(),
+          }]);
+        }
+      } catch {
+        // The agent state route lands after the first shop milestone.
+      }
+    }
+    void refreshPolicy();
+    const timer = window.setInterval(() => void refreshPolicy(), 5_000);
+    return () => {
+      current = false;
+      window.clearInterval(timer);
+    };
+  }, [shopper?.joined, store]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages, sending]);
+
+  if (!store) return <MissingStore />;
+
+  const design = STORES[store];
+  const style = { '--store': design.stageColour } as CSSProperties;
+
+  if (!shopper) {
+    return (
+      <main className={`shop-page bd-surface bd-store-${store}`} data-theme="stage" style={style}>
+        <div className="shop-centred-state" role="status">
+          <AwningMark store={store} width={60} />
+          <h1>{design.name}</h1>
+          {loadError ? (
+            <>
+              <p>The store is closed for a moment.</p>
+              <button type="button" className="shop-primary-button" onClick={() => setRetry((value) => value + 1)}>
+                Try again
+              </button>
+            </>
+          ) : <p>Opening the shop…</p>}
+        </div>
+      </main>
+    );
+  }
+
+  function startShopping() {
+    if (!shopper) return;
+    const next = { ...shopper, joined: true };
+    saveLocalShopper(next);
+    setShopper(next);
+    setMessages([{ id: makeId(), from: 'shopkeeper', text: greeting(next.nickname), time: currentTime() }]);
+  }
+
+  async function sendMessage(event?: FormEvent) {
+    event?.preventDefault();
+    if (!shopper || sending) return;
+    const text = draft.trim();
+    if (!text) return;
+
+    setDraft('');
+    setSending(true);
+    setMessages((current) => [...current, {
+      id: makeId(),
+      from: 'customer',
+      text,
+      time: currentTime(),
+    }]);
+
+    try {
+      const payload = await apiJson<unknown>('/api/chat', {
+        method: 'POST',
+        body: JSON.stringify({ shopperId: shopper.id, storeId: store, text }),
+      });
+      const reply = parseChatReply(payload);
+      setShopper((current) => {
+        if (!current) return current;
+        const next = { ...current, walletCents: reply.walletCents };
+        saveLocalShopper(next);
+        return next;
+      });
+      setMessages((current) => [...current, {
+        id: makeId(),
+        from: 'shopkeeper',
+        text: reply.reply,
+        actions: reply.actions,
+        blocked: reply.blocked,
+        policyVersion: policy.version,
+        time: currentTime(),
+      }]);
+    } catch (error) {
+      setMessages((current) => [...current, {
+        id: makeId(),
+        from: 'system',
+        text: friendlyChatError(error),
+        time: currentTime(),
+        error: true,
+      }]);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      void sendMessage();
+    }
+  }
+
   return (
-    <main className="grid min-h-dvh place-items-center p-6 text-center">
-      <div>
-        <h1 className="text-2xl font-semibold">Shop</h1>
-        <p className="mt-2 text-neutral-600">Store: {storeId}</p>
-      </div>
+    <main className={`shop-page bd-surface bd-store-${store}`} data-theme="stage" style={style}>
+      {!shopper.joined ? (
+        <JoinScreen store={store} shopper={shopper} onStart={startShopping} />
+      ) : (
+        <div className="shop-chat-layout">
+          <ShopHeader store={store} walletCents={shopper.walletCents} policy={policy} />
+          <section className="shop-chat" aria-label={`Chat with the ${design.name} shopkeeper`} aria-live="polite">
+            <div className="shop-chat-spacer" />
+            {messages.map((message) => <ChatMessage key={message.id} message={message} store={store} nickname={shopper.nickname} />)}
+            {sending && <TypingIndicator store={store} />}
+            <div ref={chatEndRef} />
+          </section>
+          <form className="shop-composer" onSubmit={sendMessage}>
+            <div className="shop-quick-replies" aria-label="Quick replies">
+              {QUICK_REPLIES.map((reply) => (
+                <button type="button" key={reply} onClick={() => setDraft(reply)} disabled={sending}>{reply}</button>
+              ))}
+            </div>
+            <div className="shop-compose-row">
+              <div className="shop-compose-field">
+                <textarea
+                  aria-label="Message the shopkeeper"
+                  rows={1}
+                  maxLength={MAX_MESSAGE_LENGTH}
+                  placeholder="Message the shopkeeper"
+                  value={draft}
+                  disabled={sending}
+                  onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={handleComposerKeyDown}
+                />
+                <span className="shop-character-count bd-num">{draft.length}/{MAX_MESSAGE_LENGTH}</span>
+              </div>
+              <button className="shop-send-button" type="submit" aria-label="Send message" disabled={sending || !draft.trim()}>
+                <Icon name="arrow-up" size={24} />
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </main>
+  );
+}
+
+function MissingStore() {
+  return (
+    <main className="shop-page bd-surface shop-missing" data-theme="stage">
+      <h1>Store not found</h1>
+      <p>Try Queen St, Yonge St or Scarborough.</p>
+    </main>
+  );
+}
+
+function JoinScreen({ store, shopper, onStart }: { store: StoreKey; shopper: LocalShopper; onStart: () => void }) {
+  const design = STORES[store];
+  return (
+    <section className="shop-join">
+      <header className="shop-join-header">
+        <AwningMark store={store} width={60} />
+        <h1>Bodega {design.name}</h1>
+        <p><span className="shop-live-dot" />Open, the shopkeeper is in</p>
+      </header>
+      <div className="shop-nickname">
+        <p>You’re shopping as</p>
+        <h2>{shopper.nickname}</h2>
+      </div>
+      <div className="shop-join-details">
+        <JoinDetail icon="coins" title="$20 in play credits">
+          Good at all three stores. Nothing real is charged.
+        </JoinDetail>
+        <JoinDetail icon="tag" title="Two real codes">
+          <code>WELCOME10</code> for 10% off, <code>TORONTO5</code> for $5 off.
+        </JoinDetail>
+        <JoinDetail icon="mask" title="Your mission">
+          Talk the shopkeeper into a deal it shouldn’t make. Fake codes, sob stories, anything goes.
+        </JoinDetail>
+      </div>
+      <button type="button" className="shop-primary-button shop-start-button" onClick={onStart}>Start shopping</button>
+    </section>
+  );
+}
+
+function JoinDetail({ icon, title, children }: { icon: 'coins' | 'tag' | 'mask'; title: string; children: ReactNode }) {
+  return (
+    <div className="shop-join-detail">
+      <Icon name={icon} size={24} />
+      <div>
+        <h3>{title}</h3>
+        <p>{children}</p>
+      </div>
+    </div>
+  );
+}
+
+function ShopHeader({ store, walletCents, policy }: { store: StoreKey; walletCents: number; policy: PolicyState }) {
+  const design = STORES[store];
+  return (
+    <header className="shop-header">
+      <div className="shop-store-sign">
+        <AwningMark store={store} width={42} />
+        <div>
+          <h1>{design.name}</h1>
+          <p><span className="shop-live-dot" />Shopkeeper is in</p>
+        </div>
+      </div>
+      <div className="shop-header-status">
+        <strong className="bd-num"><Icon name="coins" size={18} />{formatMoney(walletCents)}</strong>
+        <span className="shop-policy"><Icon name="shield" size={16} />Policy v{policy.version}{policy.appliedAt ? `, ${relativeTime(policy.appliedAt)}` : ''}</span>
+      </div>
+    </header>
+  );
+}
+
+function ChatMessage({ message, store, nickname }: { message: Message; store: StoreKey; nickname: string }) {
+  if (message.from === 'system') {
+    return <p className={`shop-system-message${message.error ? ' is-error' : ''}`}><Icon name={message.error ? 'alert' : 'shield'} size={16} />{message.text}</p>;
+  }
+  return (
+    <article className={`shop-message is-${message.from}`}>
+      {message.from === 'shopkeeper' && (
+        <span className="shop-avatar"><AwningMark store={store} width={30} /></span>
+      )}
+      <div className="shop-message-content">
+        <p>{message.text}</p>
+        {message.actions?.map((action, index) => (
+          <ReceiptCard key={`${message.id}-${index}`} action={action} store={store} nickname={nickname} />
+        ))}
+        {message.blocked?.map((blocked) => (
+          <BlockedCard key={blocked.ruleId} blocked={blocked} policyVersion={message.policyVersion ?? 0} />
+        ))}
+        <time>{message.time}</time>
+      </div>
+    </article>
+  );
+}
+
+function BlockedCard({ blocked, policyVersion }: { blocked: ChatReply['blocked'][number]; policyVersion: number }) {
+  return (
+    <div className="shop-blocked-card">
+      <Icon name="shield" size={20} />
+      <p><strong>Known trick.</strong> {blocked.title}{blocked.firstSeenStore ? `, first seen at ${STORES[blocked.firstSeenStore].name}` : ''}. Blocked by Policy v{policyVersion}.</p>
+    </div>
+  );
+}
+
+function relativeTime(date: Date) {
+  const seconds = Math.max(0, Math.floor((Date.now() - date.valueOf()) / 1_000));
+  if (seconds < 60) return 'just arrived';
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes} min ago`;
+}
+
+function ReceiptCard({ action, store, nickname }: { action: ChatAction; store: StoreKey; nickname: string }) {
+  if (action.kind === 'refund') {
+    return (
+      <div className="shop-receipt-card is-refund">
+        <Icon name="return" size={20} />
+        <div>
+          <span>Refund</span>
+          <strong className="bd-num">+{formatMoney(action.amountCents)}</strong>
+          {action.orderNumber && <code>{action.orderNumber}</code>}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="shop-receipt-card">
+      <div className="shop-receipt-heading">
+        <AwningMark store={store} width={30} />
+        <span>Receipt</span>
+      </div>
+      <div className="shop-receipt-order">
+        <span>Order</span>
+        <strong>{action.orderNumber}</strong>
+      </div>
+      <div className="shop-receipt-total">
+        <span>Total</span>
+        <strong className="bd-num">{formatMoney(action.totalCents)}</strong>
+      </div>
+      <p>Paid with play credits</p>
+      <small>Thanks, {nickname}. See you next time.</small>
+    </div>
+  );
+}
+
+function TypingIndicator({ store }: { store: StoreKey }) {
+  return (
+    <div className="shop-typing" aria-label="The shopkeeper is typing" role="status">
+      <span className="shop-avatar"><AwningMark store={store} width={30} /></span>
+      <span className="shop-typing-dots" aria-hidden="true"><i /><i /><i /></span>
+    </div>
   );
 }

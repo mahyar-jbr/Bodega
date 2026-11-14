@@ -1,0 +1,51 @@
+@import "../../../design/tokens.css";
+
+.bd-surface {
+  color: var(--ink);
+  font-family: var(--font-sans);
+  background:
+    radial-gradient(ellipse 88% 32% at 50% -8%, var(--glow), transparent 72%),
+    linear-gradient(180deg, var(--canvas), var(--canvas-deep));
+}
+
+.bd-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.bd-icon {
+  display: inline-block;
+  flex: 0 0 auto;
+  background: currentColor;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+.bd-awning {
+  display: block;
+  height: auto;
+  flex: 0 0 auto;
+}
+
+.bd-focus:focus-visible,
+.bd-surface button:focus-visible,
+.bd-surface textarea:focus-visible,
+.bd-surface input:focus-visible,
+.bd-surface select:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bd-surface *,
+  .bd-surface *::before,
+  .bd-surface *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
