@@ -8,7 +8,7 @@
 
 **Problem statement:** Memory You Can Govern (statement 2 at Agents in Context Toronto).
 
-[Live demo](https://bodega-dxwd.onrender.com) · [1-minute video]([video link]) · Built in one day at Agents in Context Toronto (MongoDB), Nov 14, 2026, by Mahyar Jaberi and Kasra Bashizadeh ([what we built at the event](#built-at-the-event)).
+[Live demo](https://bodega-dxwd.onrender.com) · [1-minute video](https://youtu.be/1yWAWO6mxAE) · Built in one day at Agents in Context Toronto (MongoDB), Nov 14, 2026, by Mahyar Jaberi and Kasra Bashizadeh ([what we built at the event](#built-at-the-event)).
 
 ## See it
 
