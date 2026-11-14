@@ -7,9 +7,13 @@ import { STORE_IDS } from '../shared/store-data';
 import { createAuditor, type Auditor } from './auditor/auditor';
 import { atlasConversations, conversationIdFor, type ConversationLog } from './conversations';
 import { V0 } from './guard/types';
+import { createConMemory, type ConMemory } from './memory/con-memory';
+import { ensureMemoryRules } from './memory/memory-rules';
 import { resetAgentState, rollbackActive } from './rollout/state';
 import { createStoreRuntimes, type StoreRuntimes } from './rollout/runtimes';
+import { screenSnapshot } from './screen/snapshot';
 import { runShopkeeper } from './shopkeeper/run';
+import { SETTINGS_HASH } from './shopkeeper/settings';
 
 export const LIMITS = Object.freeze({
   maxChars: 300,
@@ -32,6 +36,7 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
   // online on v0 (tests, and the keyless stand-in path).
   let auditor: Auditor | null = null;
   let runtimes: StoreRuntimes | null = null;
+  let conMemory: ConMemory | null = null;
   const offlineBeforeStart = new Set<StoreId>();
 
   function requireRuntimes(): StoreRuntimes {
@@ -46,11 +51,16 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
     return run;
   }
 
-  return {
+  const api: AgentApi = {
     async start() {
+      await ensureMemoryRules(deps.db);
       runtimes ??= createStoreRuntimes({ db: deps.db, bus: deps.bus });
       await runtimes.start();
-      auditor ??= createAuditor({ db: deps.db, store, bus: deps.bus });
+      conMemory ??= createConMemory({ db: deps.db });
+      await conMemory.start();
+      const memory = conMemory;
+      auditor ??= createAuditor({ db: deps.db, store, bus: deps.bus,
+        onIncident: (incident) => { memory.assign(incident).catch((e) => console.error('con memory: assign failed:', e)); } });
       await auditor.start();
     },
 
@@ -73,10 +83,11 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
         const conversationId = conversationIdFor(shopperId);
         const history = await conversations.load(conversationId);
         let result;
+        // The version this store has applied right now: after a promotion it may lag for a moment.
+        const version = runtimes?.versionFor(storeId) ?? V0;
         try {
-          // The version this store has applied right now: after a promotion it may lag for a moment.
-          const version = runtimes?.versionFor(storeId) ?? V0;
-          result = await runShopkeeper({ store, storeId, shopperId, turns: [text], version, history, conversationId });
+          result = await runShopkeeper({ store, storeId, shopperId, turns: [text], version, history, conversationId,
+            firstSeenStore: (conIds) => conMemory?.firstSeenStore(conIds) ?? null });
         } catch (error) {
           if (error instanceof Anthropic.APIError) {
             console.error(`shopkeeper call failed (${error.status ?? 'network'}): ${error.message}`);
@@ -86,7 +97,10 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
         }
         await conversations.append({ conversationId, shopperId, storeId, messages: result.messages.slice(history.length), at: new Date() });
         for (const b of result.blocked) {
-          if (b.cents > 0) auditor?.recordBlocked(storeId, b.cents).catch((e) => console.error('recordBlocked failed:', e));
+          if (b.cents > 0) {
+            auditor?.recordBlocked(storeId, b.cents, { shopperId, ruleId: b.ruleId, title: b.title, version: version.version })
+              .catch((e) => console.error('recordBlocked failed:', e));
+          }
         }
         return {
           reply: result.reply,
@@ -99,10 +113,13 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
 
     async state() {
       const s = runtimes?.agentState();
-      return {
-        activeVersion: s?.activeVersion ?? 0, learning: s?.learning ?? false, learningPaused: s?.learningPaused ?? false,
-        stores: runtimes?.stores() ?? STORE_IDS.map((storeId) => ({ storeId, appliedVersion: 0, appliedAt: null, online: !offlineBeforeStart.has(storeId) })),
+      const stores = runtimes?.stores() ?? STORE_IDS.map((storeId) => ({ storeId, appliedVersion: 0, appliedAt: null, online: !offlineBeforeStart.has(storeId) }));
+      const state = {
+        activeVersion: s?.activeVersion ?? 0, learning: s?.learning ?? false, learningPaused: s?.learningPaused ?? false, stores,
+        // The big screen's data (summaries, titles, nicknames and numbers only), once the agent has started.
+        ...(runtimes && auditor ? { screen: await screenSnapshot({ db: deps.db, store, metrics: () => auditor!.metrics(), stores: () => stores, settingsHash: SETTINGS_HASH }) } : {}),
       };
+      return state;
     },
 
     async metrics() {
@@ -123,6 +140,7 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
     async reset() {
       const r = requireRuntimes();
       await resetAgentState(deps.db);
+      conMemory?.reset();
       sent.clear();
       await r.refresh();
     },
@@ -132,4 +150,5 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
       else offlineBeforeStart.add(storeId);
     },
   };
+  return api;
 }

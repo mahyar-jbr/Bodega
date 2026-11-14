@@ -3,6 +3,7 @@
 // one transaction, so two versions are never active at once; every store runtime then applies the
 // change on its own (./runtimes.ts).
 import type { ClientSession, Db } from 'mongodb';
+import { CONVERSATIONS } from '../conversations';
 import { validateVersion } from '../guard/rules';
 import { V0, type GuardrailVersion, type Rule } from '../guard/types';
 
@@ -149,8 +150,9 @@ export async function rollbackActive(db: Db): Promise<{ fromVersion: number; toV
   });
 }
 
-/** Every store back to v0, learning resumes, and a new con-memory epoch. Keeps the version history
- *  and evaluations; clears incidents and cons. */
+/** Every store back to v0, learning resumes, and a new con-memory epoch. Keeps the version history,
+ *  evaluations and rollouts; clears incidents, cons and conversations (the store-side reset clears every
+ *  shopper, so their chats would be orphaned raw text). */
 export async function resetAgentState(db: Db): Promise<{ epoch: number; changedAt: Date }> {
   const result = await inTransaction(db, async (session) => {
     const state = await readAgentState(db, session);
@@ -161,6 +163,6 @@ export async function resetAgentState(db: Db): Promise<{ epoch: number; changedA
     }, { session });
     return { epoch, changedAt };
   });
-  await Promise.all([db.collection(INCIDENTS).deleteMany({}), db.collection(CONS).deleteMany({})]);
+  await Promise.all([db.collection(INCIDENTS).deleteMany({}), db.collection(CONS).deleteMany({}), db.collection(CONVERSATIONS).deleteMany({})]);
   return result;
 }
