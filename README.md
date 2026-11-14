@@ -101,14 +101,14 @@ What Bodega remembers, and the rule for each:
 
 - **No leaking between stores or customers.** Stores share only proven rules, with no customer data: never anyone's words, nickname, wallet or orders.
 - **Proof that the memory changed behavior, not the prompt.** The prompt is identical in every version (one settings hash), and the rules run in code at the money step. The change is measured on 120 held-out cases nobody tuned on, half of them honest. And rolling a rule back makes the same trick work again.
-- **Atlas enforces the rules, and shows it.** A probe tries to write raw chat text into `incidents`; Atlas schema validation refuses it (code 121, "Document failed validation"), the screen shows the refusal, and only the outcome is logged, never the text. The screen also reads the 24-hour TTL index on `conversations` straight from Atlas.
+- **Atlas enforces the rules, and shows it.** On the live app, a probe tried to write raw chat text into `incidents`, and Atlas schema validation refused it (code 121, `DocumentValidationFailure`). The screen shows the refusal, and only the outcome is logged, never the text. The screen also reads the TTL index on `conversations` (`raw_text_expires_24h`, 86,400 seconds) straight from Atlas.
 - **A person can approve before anything goes live.** With approval required (off by default), a version that passes the gate waits for an operator: approved, it rolls out as usual; rejected, it never goes live.
-- **One shopper can be forgotten.** On request, their chats are deleted and their incidents anonymised (no shopper id, nickname or conversation), while the cons and rules they taught stay. `forget_log` keeps counts only.
-- **Every con has an audit trail.** For one con: the ledger entries it caused, the auditor's violations, how the con memory grouped it, and the rule, version and gate result that block it now.
+- **One shopper can be forgotten.** On request, their chats are deleted and their incidents anonymised (no shopper id, nickname or conversation), while the cons and rules they taught stay; on the live app this deleted the shopper's chat. `forget_log` keeps counts only.
+- **Every con has an audit trail.** On the live app, for one con: the ledger entries it caused, the auditor's violations, how the con memory grouped it, and the rule, version and gate result that block it now.
 
-<p align="center"><img src="docs/media/memory-panel.png" width="100%" alt="The memory panel: the three memory rules, the TTL index line read from Atlas (raw chats expire 24 hours after the last message), and the cons as summaries with the store that first saw each"></p>
+<p align="center"><img src="docs/media/memory-panel.png" width="100%" alt="The memory panel on the live app: the three memory rules, the TTL index read from Atlas (raw chats expire 24 hours after the last message), Atlas refusing a raw chat text write into incidents with code 121, one shopper forgotten on request, and the cons as summaries"></p>
 
-<p align="center"><em>What Bodega remembers, and the rules for it.</em></p>
+<p align="center"><em>What Bodega remembers, and Atlas enforcing the rules for it, live.</em></p>
 
 <p align="center"><img src="docs/media/audit-trail.png" width="100%" alt="The audit trail for one con, a refund claimed for an order that never existed: grouped by Atlas Agent Memory with a 0.91 match, three ledger entries with their losses and violations, and nothing blocking it after the rollback"></p>
 
