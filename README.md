@@ -1,7 +1,7 @@
 # Bodega
 
 <p align="center">
-  <img src="docs/media/stage.png" width="100%" alt="The presenting laptop's stage view: the big screen with three conned or open stores, the tricks tried so far and the live feed, beside a phone-size shop window with four shopper tabs">
+  <img src="docs/media/stage.png" width="100%" alt="The stage view on the live app the moment every store became immune: the Flow loop lit from the con to the new policy, with Policy v11 · every store immune in 0.3 s (Queen St 316 ms, Yonge St 317 ms, Scarborough 317 ms), beside a phone-size shop window with five shopper tabs">
 </p>
 
 **Herd immunity for AI store agents.** A con that works once at one store is blocked at every store within seconds, after the fix is proven on 120 held-out cases with the same model, while honest customers still get served. The memory behind it is governed: who reads it, how long it lives and how it's taken back are rules, not promises.
@@ -44,9 +44,17 @@ Shop agents like this get talked into giving stock away: fake codes, fake member
 
 Hold the mic and talk. ElevenLabs Scribe shows a live transcript while you speak, your words go through the same frozen shopkeeper and the same guard as typed text, and the reply is spoken back with ElevenLabs text-to-speech. Per-IP caps and daily ceilings bound what voice can spend, and an unknown shopper spends nothing.
 
+<p align="center"><img src="docs/media/voice.png" width="100%" alt="The voice line on the live app, three moments at Scarborough: the live transcript while the shopper holds the mic, the shopper's bubble the moment they let go, and the shopkeeper's reply with receipt S-1001 for two butter tarts, $7.00"></p>
+
+<p align="center"><em>Live transcript while you hold the mic, then the spoken reply and the receipt.</em></p>
+
 ### The whole loop, live
 
 The big screen's Flow scene draws the mechanism as one loop of 15 steps, lit by real events as they happen: the con, the auditor, Atlas remembering it, the rule Claude writes, the held-out gate, every store immune, round 2 blocked at the same guard, and the rollback. `/stage` puts the big screen and a phone-size shop with five shopper tabs on one laptop, with the demo controls one key away.
+
+<p align="center"><img src="docs/media/flow.png" width="100%" alt="Round 2 on the live app: the same refund trick at Yonge St is blocked at the guard. The Flow scene shows the rule that stopped it, learned from Queen St, and the shop window tells the shopper that Queen St saw the trick first and every store now blocks it"></p>
+
+<p align="center"><em>Round 2 at Yonge St, live: blocked by the rule learned at Queen St, and the shop says so.</em></p>
 
 ## Results
 
