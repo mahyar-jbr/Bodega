@@ -61,6 +61,7 @@ const opsAutomation = {
   startCrowd: vi.fn(async (storeId) => ({ kind: 'crowd', status: 'running', storeId })),
   stopCrowd: vi.fn(async () => ({ kind: 'crowd', status: 'stopped' })),
 } satisfies OpsAutomation;
+const resetData = vi.fn(async () => ({ shoppersDeleted: 1 }));
 
 let server: Server;
 let base: string;
@@ -68,7 +69,7 @@ let base: string;
 beforeAll(async () => {
   const app = express();
   app.use(express.json());
-  app.use('/api', createApiRouter({ store, agent, db, opsAutomation }));
+  app.use('/api', createApiRouter({ store, agent, db, opsAutomation, resetData }));
   app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     void error;
     res.status(500).json({ error: 'internal' });
@@ -155,6 +156,8 @@ describe('password-protected ops routes', () => {
     expect((await opsPost('/api/ops/gate-demo')).status).toBe(200);
     expect((await opsPost('/api/ops/rollback')).status).toBe(200);
     expect(agent.reset).toHaveBeenCalledOnce();
+    expect(resetData).toHaveBeenCalledOnce();
+    expect(resetData.mock.invocationCallOrder[0]).toBeLessThan(agent.reset.mock.invocationCallOrder[0]);
     expect(agent.learnNow).toHaveBeenCalledOnce();
     expect(agent.runEval).toHaveBeenCalledWith({ set: 'dev', version: 2 });
     expect(agent.gateDemo).toHaveBeenCalledOnce();

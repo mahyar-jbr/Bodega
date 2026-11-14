@@ -3,6 +3,7 @@ import { Router, type RequestHandler, type Response } from 'express';
 import type { Db } from 'mongodb';
 import { z } from 'zod';
 import { AgentError, type AgentApi, type StoreApi, type StoreId } from '../shared/contract';
+import { resetStoreData } from '../store/reset';
 
 const storeIdSchema = z.enum(['queen', 'yonge', 'scarborough']);
 const shopperSchema = z.object({ storeId: storeIdSchema }).strict();
@@ -45,10 +46,12 @@ export interface RouteDeps {
   agent: AgentApi;
   db: Db;
   opsAutomation?: OpsAutomation;
+  resetData?: () => Promise<unknown>;
 }
 
-export function createApiRouter({ store, agent, db, opsAutomation }: RouteDeps): Router {
+export function createApiRouter({ store, agent, db, opsAutomation, resetData }: RouteDeps): Router {
   const router = Router();
+  const resetDataStore = resetData ?? (() => resetStoreData(db));
 
   router.post('/shoppers', async (req, res) => {
     const input = shopperSchema.safeParse(req.body);
@@ -91,6 +94,7 @@ export function createApiRouter({ store, agent, db, opsAutomation }: RouteDeps):
   router.use('/ops', requireOpsPassword);
 
   router.post('/ops/reset', async (_req, res) => {
+    await resetDataStore();
     sendResult(res, await agent.reset());
   });
 
