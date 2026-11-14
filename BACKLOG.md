@@ -31,7 +31,7 @@ Hacking starts at 10:45 (nothing for Bodega is coded before). The contract lands
 
 | ID | Task | Done when | Owner | By | State |
 |---|---|---|---|---|---|
-| S05 | Contract and stand-ins | contract.ts (with rollback and learningPaused), money.ts, the stand-in agent and a first MemoryStore are pushed, and Kasra is told | Mahyar | 11:10 | Not started |
+| S05 | Contract and stand-ins | contract.ts (with rollback and learningPaused), money.ts, the stand-in agent and a first MemoryStore are pushed, and Kasra is told | Mahyar | 11:10 | In progress |
 | M1-05 | Seed, indexes, validators | The seed, indexes and validators are in Kasra's database | Kasra A | 11:15 | Not started |
 | S07 | createAgent wired | Startup calls createAgent, and the app still builds and starts | Kasra A | 11:25 | Not started |
 | M1-10 | Databases seeded | bodega_mahyar and the deployed bodega database (on the sandbox) are seeded with Kasra's seed script | Mahyar | 11:30 | Not started |
@@ -51,7 +51,7 @@ The store runtimes, rollback and reset come right after the guard, so the never-
 | ID | Task | Done when | Owner | By | State |
 |---|---|---|---|---|---|
 | M2-01 | Facts and valid basis | Tests built from data/README.md's rules pass. A refund on an order from the same conversation counts as a discount, and needs a valid discount basis unless it cancels the whole order | Mahyar | 11:35 | Not started |
-| M2-07 | Big screen v1 | It shows the stores, money lost and a live feed of incidents and cons, from /api/agent/state and then SSE | Mahyar | 12:50 | Not started |
+| M2-07 | Big screen v1 | It shows the stores, money lost and a live feed of incidents and cons, from /api/agent/state and then SSE | Mahyar | 12:50 | In progress |
 | M2-03 | Change bus | One change stream delivers every change, and it survives a reconnect | Kasra A | 12:55 | Not started |
 | M2-02 | Guard | Every money call is checked against the store's version (no rules at v0). A failed discount rule caps the discount at the valid percentage; other failed rules block | Mahyar | 13:00 | Not started |
 | M2-05 | Auditor | Each loss with no valid basis becomes an incident with a Haiku summary and an attack metric, and agent.metrics() reports them | Mahyar | 13:15 | Not started |
@@ -71,7 +71,7 @@ A version learned from the cons is proven on 120 held-out cases with the same mo
 | ID | Task | Done when | Owner | By | State |
 |---|---|---|---|---|---|
 | M3-01 | Eval runner | It scores the dev and held-out sets on fresh in-memory stores, per category, with live progress, using M2-01's facts | Mahyar | 12:10 | Not started |
-| M3-02 | Seal test | A test fails if any file except gate/heldout.ts names heldout.jsonl | helper | 12:30 | Not started |
+| M3-02 | Seal test | A test fails if any file except gate/heldout.ts names heldout.jsonl | helper | 12:30 | In progress |
 | M3-03 | v0 baseline | v0's held-out baseline is measured twice, and again after any tuning | Mahyar | 13:35 | Not started |
 | M3-04 | v0 checked and frozen | v0 lets 30% to 50% of held-out scams through and serves at least 95% of honest cases (tuned on dev only), and the shopkeeper's settings (model, effort, tools, full prompt) are frozen into one hash. Nobody else edits the shopkeeper's files until then | Mahyar | 14:05 | Not started |
 | M3-07 | `npm run compare` | It prints v0 against the newest version, per category, with matching settings hashes | Mahyar | 14:15 | Not started |
