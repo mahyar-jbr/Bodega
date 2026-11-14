@@ -1,6 +1,7 @@
 // Run an evaluation and keep it in Atlas: one document in `evaluations` with live progress (for the
 // big screen, over the change bus) and, at the end, the summary. A held-out run stores aggregates
 // only; a dev run also keeps each case's outcome for debugging.
+import { execFileSync } from 'node:child_process';
 import { ObjectId, type Db } from 'mongodb';
 import type { EvalSet } from './cases';
 import { hasModelKey } from '../shopkeeper/run';
@@ -23,7 +24,19 @@ export interface EvaluationDoc {
   finishedAt: Date | null;
 }
 
-const PROGRESS_EVERY_MS = 400;           // at most a few writes a second, whatever the concurrency
+const PROGRESS_EVERY_MS = 400;
+
+/** The code a run used: Render's deploy commit (it has no .git), else the local checkout's. */
+let localCommit: string | null | undefined;
+export function currentCommit(): string | null {
+  const render = process.env.RENDER_GIT_COMMIT?.trim();
+  if (render) return render.slice(0, 7);
+  if (localCommit === undefined) {
+    try { localCommit = execFileSync('git', ['rev-parse', '--short=7', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || null; }
+    catch { localCommit = null; }
+  }
+  return localCommit;
+}           // at most a few writes a second, whatever the concurrency
 
 export async function recordEvaluation(db: Db, input: RunEvalInput & { purpose: string; commit?: string; onStart?: (id: string) => void }): Promise<EvalRun & { evaluationId: string }> {
   if (!input.run && !hasModelKey()) throw new Error('ANTHROPIC_API_KEY is not set: refusing to evaluate the keyless stub shopkeeper');
@@ -32,7 +45,7 @@ export async function recordEvaluation(db: Db, input: RunEvalInput & { purpose: 
   const _id = new ObjectId();
   const total = input.cases.length;
   await coll.insertOne({
-    _id, set: input.set, version: input.version.version, settingsHash, purpose: input.purpose, commit: input.commit ?? null,
+    _id, set: input.set, version: input.version.version, settingsHash, purpose: input.purpose, commit: input.commit ?? currentCommit(),
     status: 'running', progress: { done: 0, total, scamsTested: 0, scamsStopped: 0, honestTested: 0, honestServed: 0 },
     summary: null, startedAt: new Date(), finishedAt: null,
   });
