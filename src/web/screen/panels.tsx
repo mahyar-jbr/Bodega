@@ -1,7 +1,7 @@
 // The big screen's scene panels: learning (M4-01), immunity and forget, and the results (M4-03).
 import { AwningMark } from './parts';
-import { money, seconds } from './format';
-import { storeName, type ConRow, type LearningData, type VersionPoint, type ResultsData, type RolloutData, type TestProgress } from './types';
+import { clock, money, seconds } from './format';
+import { storeName, type AuditData, type ConRow, type LearningData, type VersionPoint, type ResultsData, type RolloutData, type TestProgress } from './types';
 
 // ── Learning ──────────────────────────────────────────────────────────────────────────────
 
@@ -172,7 +172,7 @@ const MEMORY_RULES: [title: string, body: string][] = [
   ['Any rule can be taken back', 'Roll back, and every store forgets it in seconds.'],
 ];
 
-export function MemoryPanel({ cons, max = 3 }: { cons: ConRow[]; max?: number }) {
+export function MemoryPanel({ cons, max = 3, onOpen }: { cons: ConRow[]; max?: number; onOpen?: (conId: string) => void }) {
   return (
     <section className="bs-glass bs-panel bs-scene" aria-label="Memory">
       <div className="bs-panel-head">
@@ -191,7 +191,7 @@ export function MemoryPanel({ cons, max = 3 }: { cons: ConRow[]; max?: number })
         <thead className="stage-label"><tr><th>Con</th><th>First seen</th><th className="bs-num-col" style={{ width: 230 }}>Blocked by</th></tr></thead>
         <tbody>
           {cons.slice(0, max).map((c) => (
-            <tr key={c.id}>
+            <tr key={c.id} onClick={() => onOpen?.(c.id)} style={{ cursor: onOpen ? 'pointer' : undefined }}>
               <td>{c.summary}</td>
               <td><span className="bs-store-chip"><AwningMark store={c.firstSeen} width={30} />{storeName(c.firstSeen)}</span></td>
               <td className={`bs-num-col ${c.coveredBy != null ? 'bs-good' : 'bs-quiet'}`}>{c.coveredBy != null ? `Policy v${c.coveredBy}` : 'Not yet'}</td>
@@ -250,6 +250,66 @@ export function VersionChart({ versions }: { versions: VersionPoint[] }) {
           </>
         )}
       </svg>
+    </section>
+  );
+}
+
+// ── The audit trail for one con (stretch X4): who allowed this, and what changed ─────────────
+
+const VIOLATION_WORDS: Record<string, string> = {
+  code_unknown: 'code not on file', code_inactive: 'code switched off', member_unknown: 'member not on file',
+  member_not_shopper: "someone else's membership", discount_no_basis: 'discount with no basis', discount_over_valid: 'bigger than the code gives',
+  price_below_list: 'below the list price', free_item: 'given away', refund_no_order: 'no such order', refund_not_shoppers: "someone else's order",
+  refund_already_refunded: 'already refunded', refund_over_refundable: 'more than was paid', refund_price_adjustment: 'refund used as a discount',
+};
+
+export function AuditPanel({ audit, index, count }: { audit: AuditData; index: number; count: number }) {
+  const cov = audit.coveredBy;
+  return (
+    <section className="bs-glass bs-panel bs-scene" aria-label="Audit trail">
+      <div className="bs-panel-head">
+        <h2 className="stage-heading">{audit.summary}</h2>
+        <span className="stage-label bs-quiet">Audit trail{count > 1 ? `, ${index + 1} of ${count}` : ''}</span>
+      </div>
+      <div className="stage-label bs-quiet" style={{ marginBottom: 16 }}>
+        First seen at {storeName(audit.firstSeen)}, {clock(new Date(audit.firstSeenAt))}. Grouped {audit.grouping === 'agent-memory'
+          ? <>by Atlas Agent Memory{audit.matchScore != null ? <> (match <span className="bd-num">{audit.matchScore.toFixed(2)}</span>)</> : null}</>
+          : 'by its violation'}: {audit.incidents} {audit.incidents === 1 ? 'incident' : 'incidents'}, {money(audit.lostCents)} lost.
+      </div>
+      <div className="bs-audit-cols">
+        <div>
+          <div className="stage-label bs-col-label">What moved, from the ledger</div>
+          {audit.entries.map((e) => (
+            <div key={`${e.at}${e.orderNumber}`} className="bs-audit-row">
+              <span className="stage-label bs-quiet bd-num">{clock(new Date(e.at))}</span>
+              <span className="stage-body">
+                <span className="mono-stage">{e.orderNumber ?? (e.kind === 'refund' ? 'refund' : 'sale')}</span>{' '}
+                <span className="bs-quiet-2">{storeName(e.store)}, v{e.guardVersion ?? 0}</span>
+                <div className="stage-label" style={{ color: 'var(--loss)' }}>{e.violations.map((v) => VIOLATION_WORDS[v] ?? v).join(', ')}</div>
+              </span>
+              <span className="stage-body bd-num" style={{ color: 'var(--loss)' }}>{'−'}{money(e.lossCents)}</span>
+            </div>
+          ))}
+        </div>
+        <div className="bs-audit-cover" data-covered={cov ? 'yes' : 'no'}>
+          <div className="stage-label bs-col-label">What blocks it now</div>
+          {!cov ? <div className="stage-body bs-quiet">Nothing yet. It's in the con memory, waiting to be learned.</div> : (
+            <>
+              <div className="stage-body"><b className="bs-ink">Policy v{cov.version}</b>{cov.promotedAt ? <span className="bs-quiet">, live since {clock(new Date(cov.promotedAt))}</span> : null}</div>
+              {cov.rules.slice(0, 2).map((r) => <div key={r.id} className="stage-body bs-rule">{r.title}</div>)}
+              {cov.gate && (
+                <div className="stage-label bs-quiet-2" style={{ marginTop: 10 }}>
+                  Proven on {cov.gate.scamsTotal + cov.gate.honestTotal} unseen cases: scams that work{' '}
+                  <span className="bd-num">{cov.gate.scamsBefore} {'→'} {cov.gate.scamsAfter}</span> of {cov.gate.scamsTotal}, honest turned away{' '}
+                  <span className="bd-num">{cov.gate.awayBefore} {'→'} {cov.gate.awayAfter}</span>. Same settings{' '}
+                  <span className="mono-stage">{cov.gate.settingsHash?.slice(0, 8)}</span>.
+                </div>
+              )}
+              <div className="stage-label" style={{ marginTop: 10, color: 'var(--immune)' }}>Blocked {audit.blocked} {audit.blocked === 1 ? 'time' : 'times'} since</div>
+            </>
+          )}
+        </div>
+      </div>
     </section>
   );
 }

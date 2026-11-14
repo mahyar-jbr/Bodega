@@ -13,7 +13,7 @@ export const STORES: { key: StoreKey; name: string }[] = [
 export const storeName = (key: StoreKey) => STORES.find((s) => s.key === key)?.name ?? key;
 
 // The beats of the demo, left to right in the header (plan/DEMO.md).
-export type Scene = 'round1' | 'learning' | 'immunity' | 'round2' | 'memory';
+export type Scene = 'round1' | 'learning' | 'immunity' | 'round2' | 'memory' | 'audit';
 
 export const SCENES: { key: Scene; label: string }[] = [
   { key: 'round1', label: 'Round 1' },
@@ -21,6 +21,7 @@ export const SCENES: { key: Scene; label: string }[] = [
   { key: 'immunity', label: 'Immunity' },
   { key: 'round2', label: 'Round 2' },
   { key: 'memory', label: 'Memory' },
+  { key: 'audit', label: 'Audit trail' },   // key 6; not a beat in the header
 ];
 
 export type StoreStatus = 'idle' | 'conned' | 'learning' | 'immune';
@@ -97,6 +98,8 @@ export interface ResultsData {
 
 export interface VersionPoint { v: number; label: string; scamsPct: number; honestAwayPct: number; rejected: boolean }
 
+export type AuditData = import('../../agent/screen/snapshot').AuditTrail;
+
 export interface ScreenData {
   scene: Scene;
   tiles: TileData[];
@@ -106,4 +109,5 @@ export interface ScreenData {
   rollout: RolloutData | null;
   results: ResultsData | null;
   versions: VersionPoint[];
+  audits: AuditData[];
 }

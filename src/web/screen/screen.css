@@ -242,3 +242,7 @@
 .bs-key-dot { background: radial-gradient(circle, var(--served) 1.5px, transparent 2px) 0 0 / 9px 3px repeat-x; }
 .bs-chart { overflow: visible; }
 .bs-chart-t { font: 450 26px var(--font-sans); fill: var(--ink-3); font-variant-numeric: tabular-nums; }
+.bs-audit-cols { display: grid; grid-template-columns: 1.15fr 1fr; gap: var(--space-12); flex: 1; min-height: 0; }
+.bs-audit-row { display: grid; grid-template-columns: 90px 1fr auto; gap: 16px; align-items: baseline; padding: 12px 0; border-top: 1px solid var(--line); }
+.bs-audit-cover { border-left: 1px solid var(--line); padding-left: var(--space-8); }
+.bs-audit-cover b { font-weight: 560; }

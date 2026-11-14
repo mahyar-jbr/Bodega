@@ -45,11 +45,13 @@ export function StageFrame({ children }: { children: ReactNode }) {
 
 const SCENE_TONE: Record<Scene, string> = {
   round1: 'var(--loss)', learning: 'var(--learning)', immunity: 'var(--immune)',
-  round2: 'var(--immune)', memory: 'var(--learning)',
+  round2: 'var(--immune)', memory: 'var(--learning)', audit: 'var(--learning)',
 };
 
 export function StageHeader({ scene }: { scene: Scene }) {
-  const current = SCENES.findIndex((s) => s.key === scene);
+  // The audit trail belongs to the Memory beat.
+  const beats = SCENES.filter((s) => s.key !== 'audit');
+  const current = beats.findIndex((s) => s.key === (scene === 'audit' ? 'memory' : scene));
   return (
     <header className="bs-header">
       <div className="bs-logo">
@@ -57,7 +59,7 @@ export function StageHeader({ scene }: { scene: Scene }) {
         <span className="bs-wordmark">bodega</span>
       </div>
       <nav className="bs-beats" aria-label="Story">
-        {SCENES.map((s, i) => (
+        {beats.map((s, i) => (
           <div key={s.key} className="bs-beat stage-label"
             data-state={i < current ? 'done' : i === current ? 'current' : 'next'}
             style={{ ['--tone' as string]: SCENE_TONE[s.key] }}>

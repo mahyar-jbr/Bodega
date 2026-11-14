@@ -42,11 +42,34 @@ export interface ScreenSnapshot {
     learningPaused: boolean;
   };
   versions: { v: number; label: string; scamsPct: number; honestAwayPct: number; rejected: boolean }[];
+  audits: AuditTrail[];
   results: null | {
     before: { version: number; scamsPct: number; honestAway: number };
     after: { version: number; scamsPct: number; honestAway: number };
     honestTotal: number;
     immunityMs: number | null;
+  };
+}
+
+/** One con, end to end: what moved, what the auditor saw, how memory grouped it, and what blocks it now. */
+export interface AuditTrail {
+  conId: string;
+  summary: string;
+  title: string;
+  firstSeen: StoreId;
+  firstSeenAt: string;
+  grouping: 'agent-memory' | 'violation';
+  matchScore: number | null;
+  stores: StoreId[];
+  incidents: number;
+  lostCents: number;
+  blocked: number;
+  entries: { at: string; store: StoreId; kind: 'sale' | 'refund'; walletDeltaCents: number; orderNumber: string | null;
+    lossCents: number; violations: string[]; who: string | null; guardVersion: number | null }[];
+  coveredBy: null | {
+    version: number; promotedAt: string | null; rules: { id: string; title: string }[];
+    gate: null | { verdict: string; scamsBefore: number; scamsAfter: number; scamsTotal: number; awayBefore: number; awayAfter: number;
+      honestTotal: number; settingsHash: string | null; evaluationId: string };
   };
 }
 
@@ -171,6 +194,37 @@ export async function screenSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot
       honestAwayPct: e.summary.honest.turnedAwayPct, rejected });
   }
 
+  // ── Audit trails for up to three cons, covered ones first ──
+  const auditCons = [...cons].sort((a, b) => Number(b.coveredBy != null) - Number(a.coveredBy != null)).slice(0, 3);
+  const auditIncidents = incidents.filter((i) => i.conId && auditCons.some((c) => c._id === i.conId));
+  const ledgerDocs = auditIncidents.length
+    ? await db.collection('ledger').find({ id: { $in: auditIncidents.map((i) => i.ledgerId) } },
+        { projection: { id: 1, kind: 1, storeId: 1, walletDeltaCents: 1, claimedOrderNumber: 1, guardVersion: 1, at: 1 } }).toArray()
+    : [];
+  const audits: AuditTrail[] = auditCons.map((c) => {
+    const g = c.coveredBy != null ? byVersion.get(c.coveredBy) : undefined;
+    const gateRec = (g as (GuardrailDoc & { gate?: { verdict: string; evaluationId: string;
+      candidate: { scamSuccess: number; scamsTotal: number; honestTurnedAway: number; honestTotal: number; settingsHash: string | null };
+      baseline: { scamSuccess: number; honestTurnedAway: number } } }) | undefined)?.gate;
+    return {
+      conId: c._id, summary: c.summary, title: c.title, firstSeen: c.firstSeenStore, firstSeenAt: c.firstSeenAt.toISOString(),
+      grouping: c.grouping, matchScore: c.matchScore, stores: c.stores, incidents: c.incidents, lostCents: c.lostCents,
+      blocked: blockedPerCon.get(c._id) ?? 0,
+      entries: auditIncidents.filter((i) => i.conId === c._id).slice(0, 4).map((i) => {
+        const l = ledgerDocs.find((d) => d.id === i.ledgerId);
+        return { at: i.at.toISOString(), store: i.storeId, kind: i.kind, walletDeltaCents: (l?.walletDeltaCents as number) ?? (i.kind === 'refund' ? i.lossCents : -i.lossCents),
+          orderNumber: i.orderNumber, lossCents: i.lossCents, violations: i.violations, who: i.nickname, guardVersion: i.guardVersion };
+      }),
+      coveredBy: !g ? null : {
+        version: g._id, promotedAt: iso(g.promotedAt),
+        rules: g.rules.filter((r) => r.cons.includes(c._id)).map((r) => ({ id: r.id, title: r.title })),
+        gate: gateRec ? { verdict: gateRec.verdict, scamsBefore: gateRec.baseline.scamSuccess, scamsAfter: gateRec.candidate.scamSuccess,
+          scamsTotal: gateRec.candidate.scamsTotal, awayBefore: gateRec.baseline.honestTurnedAway, awayAfter: gateRec.candidate.honestTurnedAway,
+          honestTotal: gateRec.candidate.honestTotal, settingsHash: gateRec.candidate.settingsHash, evaluationId: gateRec.evaluationId } : null,
+      },
+    };
+  });
+
   // ── Tiles ──
   const runtime = deps.stores();
   const tiles: ScreenSnapshot['tiles'] = STORES.map((store) => {
@@ -231,5 +285,5 @@ export async function screenSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot
     : state?.change === 'promote' && sinceChange < 30_000 ? 'immunity'
     : activeVersion > 0 ? 'round2' : 'round1';
 
-  return { scene, activeVersion, epoch, tiles, feed, cons: conRows, learning, rollout, versions, results };
+  return { scene, activeVersion, epoch, tiles, feed, cons: conRows, learning, rollout, versions, audits, results };
 }

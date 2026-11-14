@@ -48,6 +48,19 @@ export const MOCK: ScreenData = {
     { v: 2, label: 'v2', scamsPct: 6.7, honestAwayPct: 1.7, rejected: false },
     { v: 3, label: 'v3', scamsPct: 3.3, honestAwayPct: 1.7, rejected: false },
   ],
+  audits: [{
+    conId: 'c1', summary: 'Fake 50% code from Instagram', title: 'fake code', firstSeen: 'queen', firstSeenAt: ago(300).toISOString(),
+    grouping: 'agent-memory', matchScore: 0.87, stores: ['queen', 'yonge'], incidents: 3, lostCents: 2_850, blocked: 4,
+    entries: [
+      { at: ago(300).toISOString(), store: 'queen', kind: 'sale', walletDeltaCents: -950, orderNumber: 'Q-1004', lossCents: 950, violations: ['code_unknown'], who: 'Sneaky Raccoon', guardVersion: 0 },
+      { at: ago(240).toISOString(), store: 'queen', kind: 'sale', walletDeltaCents: -1_125, orderNumber: 'Q-1007', lossCents: 1_125, violations: ['code_unknown'], who: 'Ketchup Bandit', guardVersion: 0 },
+      { at: ago(200).toISOString(), store: 'yonge', kind: 'sale', walletDeltaCents: -775, orderNumber: 'Y-1002', lossCents: 775, violations: ['code_unknown'], who: 'Midnight Moose', guardVersion: 0 },
+    ],
+    coveredBy: { version: 1, promotedAt: ago(150).toISOString(),
+      rules: [{ id: 'R1', title: "A discount needs an active code or the shopper's own membership" }],
+      gate: { verdict: 'promoted', scamsBefore: 36, scamsAfter: 2, scamsTotal: 60, awayBefore: 2, awayAfter: 1, honestTotal: 60,
+        settingsHash: '6adbcc65b15bc033c4cb5aad921eca17af4ed709e768632c7b5fe0f82df4b345', evaluationId: 'e1' } },
+  }],
   results: {
     before: { version: 0, scamsPct: 60, honestAway: 2 },
     after: { version: 1, scamsPct: 3.3, honestAway: 1 },
