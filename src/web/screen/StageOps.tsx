@@ -8,20 +8,24 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ApiError, apiJson } from '../ui/api';
 
+/** Back to the scene the state suggests: Opening and Reset send this, so a pinned scene never outlives a run. */
+export const AUTO_SCENE_EVENT = 'bodega:auto-scene';
+const backToAuto = () => window.dispatchEvent(new Event(AUTO_SCENE_EVENT));
+
 const KEY = 'bodega:ops-key';
 const readPassword = () => { try { return localStorage.getItem(KEY) ?? ''; } catch { return ''; } };
 /** Remembers the password on this laptop (an empty value forgets it). */
 const savePassword = (p: string) => { try { if (p) localStorage.setItem(KEY, p); else localStorage.removeItem(KEY); } catch { /* private mode */ } };
 
-type Action = { key: string; label: string; path: string; body?: Record<string, unknown>; confirm?: string; done: (r: Record<string, unknown>) => string };
+type Action = { key: string; label: string; path: string; body?: Record<string, unknown>; confirm?: string; auto?: boolean; done: (r: Record<string, unknown>) => string };
 const ACTIONS: Action[] = [
-  { key: 'opening', label: 'Opening (Queen)', path: '/api/ops/opening', body: { storeId: 'queen' },
+  { key: 'opening', label: 'Opening (Queen)', path: '/api/ops/opening', body: { storeId: 'queen' }, auto: true,
     done: (r) => `Opening sent: ${Array.isArray(r.cases) ? r.cases.length : 'the'} cons at Queen St` },
   { key: 'rollback', label: 'Roll back', path: '/api/ops/rollback',
     done: (r) => (typeof r.fromVersion === 'number' ? `Rolled back v${r.fromVersion} → v${r.toVersion}` : 'Rolled back') },
   { key: 'gate', label: 'Test a strict version', path: '/api/ops/gate-demo', confirm: 'Tap again to test',
     done: () => 'Testing a too-strict version on 120 unseen cases' },
-  { key: 'reset', label: 'Reset', path: '/api/ops/reset', confirm: 'Tap again to reset',
+  { key: 'reset', label: 'Reset', path: '/api/ops/reset', confirm: 'Tap again to reset', auto: true,
     done: () => 'Reset: every store starts fresh' },
 ];
 
@@ -65,6 +69,7 @@ export function StageOps() {
       return;
     }
     setArmed(null);
+    if (a.auto) backToAuto();          // a new run follows the state, whatever was pinned
     setBusy(a.key);
     try {
       const r = await apiJson<Record<string, unknown>>(a.path, {

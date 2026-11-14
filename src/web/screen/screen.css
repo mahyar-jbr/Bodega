@@ -249,6 +249,12 @@
 .bs-root:focus { outline: none; }
 .bs-pin { position: absolute; left: 40px; bottom: 4px; color: var(--ink-3); font-size: 26px; pointer-events: none; }
 .bs-pin-right { left: auto; right: 40px; }
+/* A pinned scene: small but unmistakable, and a click goes back to auto. */
+.bs-pin-on { pointer-events: auto; cursor: pointer; bottom: 4px; display: inline-flex; align-items: center; gap: 10px; line-height: 1.25;
+  padding: 2px 14px; border-radius: 999px; border: 1px solid color-mix(in oklab, var(--learning) 55%, transparent);
+  background: color-mix(in oklab, var(--learning) 16%, transparent); color: var(--learning); font: inherit; font-size: 22px; z-index: 5; }
+.bs-pin-on:hover { background: color-mix(in oklab, var(--learning) 26%, transparent); }
+.bs-pin-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--learning); flex: none; }
 .bs-legend { display: flex; gap: 28px; color: var(--ink-2); }
 .bs-legend > span { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; }
 .bs-key { display: inline-block; width: 28px; height: 3px; border-radius: 2px; }

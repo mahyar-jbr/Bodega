@@ -121,4 +121,5 @@ export interface ScreenData {
   flash: FlashData | null;
   memory: MemoryData;
   flow: FlowData | null;
+  epoch?: number;                  // the server's demo epoch: a Reset starts a new one
 }

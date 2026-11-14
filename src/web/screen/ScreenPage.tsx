@@ -4,7 +4,7 @@ import './screen.css';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useScreenData } from './live';
-import { isTyping } from './StageOps';
+import { AUTO_SCENE_EVENT, isTyping } from './StageOps';
 import { FlowScene, flowBeat, flowFocus } from './FlowScene';
 import { AuditPanel, FlashPanel, LearningPanel, MemoryPanel, ResultsRow, RolloutPanel, VersionChart } from './panels';
 import { ConWall, LiveFeed, StageFrame, StageHeader, StoreTile } from './parts';
@@ -12,9 +12,21 @@ import { SCENES, type Scene, type ScreenData } from './types';
 
 // On the presenting laptop: 1 to 5 pin a scene, 0 goes back to the scene the state suggests.
 // 6 opens the audit trail; pressing 6 again moves to the next con. 7 shows the flash sale.
-function usePinnedScene(): { pinned: Scene | null; auditIndex: number; openAudit: (i: number) => void } {
+// A new epoch (a Reset, from anywhere) and Opening on /stage also go back to auto.
+function usePinnedScene(epoch: number | undefined): { pinned: Scene | null; auditIndex: number; openAudit: (i: number) => void; unpin: () => void } {
   const [pinned, setPinned] = useState<Scene | null>(null);
   const [auditIndex, setAuditIndex] = useState(0);
+  const lastEpoch = useRef(epoch);
+  useEffect(() => {
+    if (epoch === undefined) return;
+    if (lastEpoch.current !== undefined && lastEpoch.current !== epoch) { setPinned(null); setAuditIndex(0); }
+    lastEpoch.current = epoch;
+  }, [epoch]);
+  useEffect(() => {
+    const auto = () => setPinned(null);
+    window.addEventListener(AUTO_SCENE_EVENT, auto);
+    return () => window.removeEventListener(AUTO_SCENE_EVENT, auto);
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
@@ -31,7 +43,7 @@ function usePinnedScene(): { pinned: Scene | null; auditIndex: number; openAudit
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
-  return { pinned, auditIndex, openAudit: (i: number) => { setAuditIndex(i); setPinned('audit'); } };
+  return { pinned, auditIndex, openAudit: (i: number) => { setAuditIndex(i); setPinned('audit'); }, unpin: () => setPinned(null) };
 }
 
 export default function ScreenPage() {
@@ -48,7 +60,7 @@ export default function ScreenPage() {
 /** The big screen at 1920 by 1080, scaled into its container: /screen fills the window, /stage the left side. */
 export function BigScreen() {
   const { data, connection } = useScreenData();
-  const { pinned, auditIndex, openAudit } = usePinnedScene();
+  const { pinned, auditIndex, openAudit, unpin } = usePinnedScene(data.epoch);
   // ?scene=learning previews a scene by hand.
   const [params] = useSearchParams();
   const asked = params.get('scene');
@@ -70,7 +82,12 @@ export function BigScreen() {
             </div>
           </>
         )}
-        {pinned && <div className="bs-pin stage-label">{SCENES.find((x) => x.key === pinned)!.label} pinned · 0 for auto</div>}
+        {pinned && (
+          <button type="button" className="bs-pin bs-pin-on stage-label" onMouseDown={(e) => e.preventDefault()} onClick={unpin}
+            title="Back to auto (0)" aria-label={`${SCENES.find((x) => x.key === pinned)!.label} pinned. Back to auto`}>
+            <span className="bs-pin-dot" aria-hidden="true" />{SCENES.find((x) => x.key === pinned)!.label} pinned · 0 for auto
+          </button>
+        )}
         {connection === 'stale' && <div className="bs-pin bs-pin-right stage-label">Reconnecting</div>}
       </StageFrame>
     </div>

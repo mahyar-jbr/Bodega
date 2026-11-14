@@ -30,6 +30,7 @@ export function fromSnapshot(s: ScreenSnapshot): ScreenData {
     flash: s.flash ?? null,
     memory: s.memory ?? { proof: null, ttlSeconds: null, forgotten: 0 },
     flow: s.flow ?? null,
+    epoch: s.epoch,
   };
 }
 
