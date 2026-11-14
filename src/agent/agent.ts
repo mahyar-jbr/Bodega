@@ -154,7 +154,7 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
         activeVersion: s?.activeVersion ?? 0, learning: s?.learning ?? false, learningPaused: s?.learningPaused ?? false, stores,
         approvalRequired: s?.approvalRequired ?? false, awaitingApproval,
         // The big screen's data (summaries, titles, nicknames and numbers only), once the agent has started.
-        ...(runtimes && auditor ? { screen: await screenSnapshot({ db: deps.db, store, metrics: () => auditor!.metrics(), stores: () => stores, settingsHash: SETTINGS_HASH }) } : {}),
+        ...(runtimes && auditor ? { screen: await screenSnapshot({ db: deps.db, store, metrics: () => auditor!.metrics(), stores: () => stores, settingsHash: SETTINGS_HASH, awaitingApproval: () => awaitingApproval }) } : {}),
       };
       return state;
     },

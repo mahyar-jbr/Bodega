@@ -122,7 +122,8 @@ describe.skipIf(!uri)('governance on Atlas', () => {
     expect(await db.collection('incidents').findOne({ shopperId: other.id })).toMatchObject({ nickname: 'Brave Owl 12' });
     const log = await db.collection(FORGET_LOG).find().toArray();
     expect(log).toHaveLength(1);
-    expect(log[0]!.counts).toEqual({ conversationsDeleted: 1, incidentsRedacted: 2, metricsRedacted: 0 });
+    expect(log[0]).toMatchObject({ conversationsDeleted: 1, incidentsRedacted: 2, metricsRedacted: 0 });
+    expect(Object.keys(log[0]!).sort()).toEqual(['_id', 'at', 'conversationsDeleted', 'incidentsRedacted', 'metricsRedacted']);
     expect(JSON.stringify(log[0])).not.toContain(gone.id);
     expect(JSON.stringify(log[0])).not.toContain('Raccoon');
   }, 30_000);

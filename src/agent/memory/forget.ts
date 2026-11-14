@@ -13,7 +13,9 @@ export const FORGOTTEN_NICKNAME = 'a forgotten shopper';
 
 export interface ForgetLogDoc {
   at: Date;
-  counts: { conversationsDeleted: number; incidentsRedacted: number; metricsRedacted: number };
+  conversationsDeleted: number;
+  incidentsRedacted: number;
+  metricsRedacted: number;
 }
 
 export async function forgetShopper(db: Db, store: StoreApi, shopperId: string): Promise<{ conversationsDeleted: number; incidentsRedacted: number }> {
@@ -31,7 +33,7 @@ export async function forgetShopper(db: Db, store: StoreApi, shopperId: string):
       .then((r) => r.modifiedCount)
       .catch((e) => { console.error(`forget: attack_metrics not anonymised (${(e as Error).message})`); return 0; });
   }
-  const counts = { conversationsDeleted: conversations.deletedCount, incidentsRedacted: incidents.modifiedCount, metricsRedacted };
-  await db.collection<ForgetLogDoc>(FORGET_LOG).insertOne({ at: new Date(), counts });
-  return { conversationsDeleted: counts.conversationsDeleted, incidentsRedacted: counts.incidentsRedacted };
+  const entry: ForgetLogDoc = { at: new Date(), conversationsDeleted: conversations.deletedCount, incidentsRedacted: incidents.modifiedCount, metricsRedacted };
+  await db.collection<ForgetLogDoc>(FORGET_LOG).insertOne(entry);
+  return { conversationsDeleted: entry.conversationsDeleted, incidentsRedacted: entry.incidentsRedacted };
 }
