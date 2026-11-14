@@ -12,7 +12,7 @@
 |---|---|---|---|---|
 | Before the event | The test data, a generic skeleton live on Render, and this plan, tagged `pre-event` | The live app's /api/health is green, and the tag is on GitHub | Fri Nov 13 | Done |
 | M1 | A real purchase through chat on a phone | M1-09, on the deployed app | 12:40 | 2 of 12 |
-| M2 | v0 gets conned, incidents and cons land in Atlas under the memory rules, and a version rolls out to every store and back | M2-09 | 14:20 | 0 of 13 |
+| M2 | v0 gets conned, incidents and cons land in Atlas under the memory rules, and a version rolls out to every store and back | M2-09 | 14:20 | 1 of 13 |
 | M3 | The stores learn: a version is proven on the held-out set, goes live everywhere, and Roll back takes it back | M3-10, on the deployed app | 15:25 | 1 of 11 |
 | M4 | The 3-minute demo works end to end, driven only by us, and is recorded | M4-10 | 16:00 | 0 of 6 |
 | Submit | Frozen, submitted and rehearsed | F06, submitted | 16:50 | 0 of 8 |
@@ -50,7 +50,7 @@ The store runtimes, rollback and reset come right after the guard, so the never-
 
 | ID | Task | Done when | Owner | By | State |
 |---|---|---|---|---|---|
-| M2-01 | Facts and valid basis | Tests built from data/README.md's rules pass. A refund on an order from the same conversation counts as a discount, and needs a valid discount basis unless it cancels the whole order | Mahyar | 11:35 | In progress |
+| M2-01 | Facts and valid basis | Tests built from data/README.md's rules pass. A refund on an order from the same conversation counts as a discount, and needs a valid discount basis unless it cancels the whole order | Mahyar | 11:35 | Done |
 | M2-07 | Big screen v1 | It shows the stores, money lost and a live feed of incidents and cons, from /api/agent/state and then SSE | Mahyar | 12:50 | In progress |
 | M2-03 | Change bus | One change stream delivers every change, and it survives a reconnect | Kasra A | 12:55 | Not started |
 | M2-02 | Guard | Every money call is checked against the store's version (no rules at v0). A failed discount rule caps the discount at the valid percentage; other failed rules block | Mahyar | 13:00 | Not started |
@@ -70,7 +70,7 @@ A version learned from the cons is proven on 120 held-out cases with the same mo
 
 | ID | Task | Done when | Owner | By | State |
 |---|---|---|---|---|---|
-| M3-01 | Eval runner | It scores the dev and held-out sets on fresh in-memory stores, per category, with live progress, using M2-01's facts | Mahyar | 12:10 | Not started |
+| M3-01 | Eval runner | It scores the dev and held-out sets on fresh in-memory stores, per category, with live progress, using M2-01's facts | Mahyar | 12:10 | In progress |
 | M3-02 | Seal test | A test fails if any file except gate/heldout.ts names heldout.jsonl | helper | 12:30 | Done |
 | M3-03 | v0 baseline | v0's held-out baseline is measured twice, and again after any tuning | Mahyar | 13:35 | Not started |
 | M3-04 | v0 checked and frozen | v0 lets 30% to 50% of held-out scams through and serves at least 95% of honest cases (tuned on dev only), and the shopkeeper's settings (model, effort, tools, full prompt) are frozen into one hash. Nobody else edits the shopkeeper's files until then | Mahyar | 14:05 | Not started |
