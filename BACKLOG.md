@@ -12,7 +12,7 @@
 |---|---|---|---|---|
 | Before the event | The test data, a generic skeleton live on Render, and this plan, tagged `pre-event` | The live app's /api/health is green, and the tag is on GitHub | Fri Nov 13 | Done |
 | M1 | A real purchase through chat on a phone | M1-09, on the deployed app | 12:40 | 5 of 12 |
-| M2 | v0 gets conned, incidents and cons land in Atlas under the memory rules, and a version rolls out to every store and back | M2-09 | 14:20 | 2 of 13 |
+| M2 | v0 gets conned, incidents and cons land in Atlas under the memory rules, and a version rolls out to every store and back | M2-09 | 14:20 | 3 of 13 |
 | M3 | The stores learn: a version is proven on the held-out set, goes live everywhere, and Roll back takes it back | M3-10, on the deployed app | 15:25 | 3 of 11 |
 | M4 | The 3-minute demo works end to end, driven only by us, and is recorded | M4-10 | 16:00 | 0 of 6 |
 | Submit | Frozen, submitted and rehearsed | F06, submitted | 16:50 | 0 of 8 |
@@ -53,10 +53,10 @@ The store runtimes, rollback and reset come right after the guard, so the never-
 | M2-01 | Facts and valid basis | Tests built from data/README.md's rules pass. A refund on an order from the same conversation counts as a discount, and needs a valid discount basis unless it cancels the whole order | Mahyar | 11:35 | Done |
 | M2-07 | Big screen v1 | It shows the stores, money lost and a live feed of incidents and cons, from /api/agent/state and then SSE | Mahyar | 12:50 | In progress |
 | M2-03 | Change bus | One change stream delivers every change, and it survives a reconnect | Kasra A | 12:55 | Not started |
-| M2-02 | Guard | Every money call is checked against the store's version (no rules at v0). A failed discount rule caps the discount at the valid percentage; other failed rules block | Mahyar | 13:00 | In progress |
+| M2-02 | Guard | Every money call is checked against the store's version (no rules at v0). A failed discount rule caps the discount at the valid percentage; other failed rules block | Mahyar | 13:00 | Done |
 | M2-05 | Auditor | Each loss with no valid basis becomes an incident with a Haiku summary and an attack metric, and agent.metrics() reports them | Mahyar | 13:15 | Done |
 | M2-04 | SSE and agent routes | SSE streams the four topics, and /api/agent/state and /api/agent/metrics answer | Kasra A | 13:25 | Not started |
-| M4-02 | Store runtimes and rollout | Each store applies the active version from the change bus and records its time to immunity, tested with a hand-written version | Mahyar | 13:25 | Not started |
+| M4-02 | Store runtimes and rollout | Each store applies the active version from the change bus and records its time to immunity, tested with a hand-written version | Mahyar | 13:25 | In progress |
 | M2-11 | Rollback | agent.rollback() moves activeVersion back in one transaction, records it and pauses learning; every store applies the older version and records its time to forget (POST /api/ops/rollback) | Mahyar | 13:45 | Not started |
 | M4-12 | agent.reset() | Every store is back on v0 with the versions and evaluations kept; incidents, cons and the learning lock are cleared, and learning resumes in a new con-memory epoch | Mahyar | 13:45 | Not started |
 | M2-08 | Crowd bot and opening | It replays dev cases at one store with rate caps and can be started with curl; its opening sends three dev scams at once (POST /api/ops/opening) | Kasra A | 14:00 | Not started |
