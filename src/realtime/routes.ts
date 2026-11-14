@@ -2,7 +2,6 @@ import { Router, type Request, type Response } from 'express';
 import {
   SCREEN_COLLECTIONS,
   STRIP_FIELDS,
-  type AgentApi,
   type ChangeBus,
   type ChangeEvent,
   type StoreId,
@@ -15,8 +14,7 @@ const STORE_COLLECTIONS = ['orders', 'ledger'] as const;
 const SHOPPER_COLLECTIONS = ['shoppers', 'orders', 'ledger'] as const;
 const STRIPPED = new Set<string>(STRIP_FIELDS);
 
-export interface RealtimeRouteDeps {
-  agent: AgentApi;
+export interface SseRouteDeps {
   bus: ChangeBus;
 }
 
@@ -26,24 +24,8 @@ interface TopicSubscription {
   matches: (event: ChangeEvent) => boolean;
 }
 
-export function createRealtimeRouter({ agent, bus }: RealtimeRouteDeps): Router {
+export function createSseRouter({ bus }: SseRouteDeps): Router {
   const router = Router();
-
-  router.get('/api/agent/state', async (_req, res, next) => {
-    try {
-      res.json(await agent.state());
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  router.get('/api/agent/metrics', async (_req, res, next) => {
-    try {
-      res.json(await agent.metrics());
-    } catch (error) {
-      next(error);
-    }
-  });
 
   router.get('/api/events', (req, res) => {
     const parsed = parseTopics(req);

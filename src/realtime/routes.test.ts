@@ -1,9 +1,9 @@
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import express from 'express';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import type { AgentApi, ChangeBus, ChangeEvent } from '../shared/contract';
-import { createRealtimeRouter } from './routes';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { ChangeBus, ChangeEvent } from '../shared/contract';
+import { createSseRouter } from './routes';
 
 class FakeBus implements ChangeBus {
   private readonly listeners = new Map<string, Set<(event: ChangeEvent) => void>>();
@@ -22,16 +22,12 @@ class FakeBus implements ChangeBus {
 }
 
 const bus = new FakeBus();
-const agent = {
-  state: vi.fn(async () => ({ activeVersion: 2, learning: false, learningPaused: false, stores: [] })),
-  metrics: vi.fn(async () => []),
-} as unknown as AgentApi;
 let server: Server;
 let base: string;
 
 beforeAll(async () => {
   const app = express();
-  app.use(createRealtimeRouter({ agent, bus }));
+  app.use(createSseRouter({ bus }));
   server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -40,15 +36,6 @@ beforeAll(async () => {
 afterAll(() => new Promise((resolve) => server.close(resolve)));
 
 describe('realtime routes', () => {
-  it('returns agent state and metrics', async () => {
-    const state = await fetch(`${base}/api/agent/state`);
-    expect(state.status).toBe(200);
-    expect(await state.json()).toMatchObject({ activeVersion: 2, learningPaused: false });
-    const metrics = await fetch(`${base}/api/agent/metrics`);
-    expect(metrics.status).toBe(200);
-    expect(await metrics.json()).toEqual([]);
-  });
-
   it('rejects an unknown topic', async () => {
     const response = await fetch(`${base}/api/events?topics=nope`);
     expect(response.status).toBe(400);
