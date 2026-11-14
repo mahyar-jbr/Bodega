@@ -6,7 +6,9 @@ import { AgentError, type AgentApi, type AgentDeps, type StoreId } from '../shar
 import { STORE_IDS } from '../shared/store-data';
 import { createAuditor, type Auditor } from './auditor/auditor';
 import { atlasConversations, conversationIdFor, type ConversationLog } from './conversations';
-import { V0, type GuardrailVersion } from './guard/types';
+import { V0 } from './guard/types';
+import { resetAgentState, rollbackActive } from './rollout/state';
+import { createStoreRuntimes, type StoreRuntimes } from './rollout/runtimes';
 import { runShopkeeper } from './shopkeeper/run';
 
 export const LIMITS = Object.freeze({
@@ -26,10 +28,16 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
   const now = options.now ?? Date.now;
   const sent = new Map<string, { last: number; count: number }>();
   const queues = new Map<string, Promise<unknown>>();
-  let auditor: Auditor | null = null;   // created in start(): it needs the database and the change bus
-  // Each store's applied version and status. The store runtimes (M4-02) keep these from the change bus.
-  const applied = new Map<StoreId, { version: GuardrailVersion; appliedAt: Date | null; online: boolean }>(
-    STORE_IDS.map((id) => [id, { version: V0, appliedAt: null, online: true }]));
+  // Created in start(): they need the database and the change bus. Before start(), every store is
+  // online on v0 (tests, and the keyless stand-in path).
+  let auditor: Auditor | null = null;
+  let runtimes: StoreRuntimes | null = null;
+  const offlineBeforeStart = new Set<StoreId>();
+
+  function requireRuntimes(): StoreRuntimes {
+    if (!runtimes) throw new AgentError('unavailable', 'The agent has not started.');
+    return runtimes;
+  }
 
   /** One message at a time per shopper, so their conversation stays in order. */
   function serial<T>(key: string, fn: () => Promise<T>): Promise<T> {
@@ -40,6 +48,8 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
 
   return {
     async start() {
+      runtimes ??= createStoreRuntimes({ db: deps.db, bus: deps.bus });
+      await runtimes.start();
       auditor ??= createAuditor({ db: deps.db, store, bus: deps.bus });
       await auditor.start();
     },
@@ -47,9 +57,9 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
     async handleMessage({ shopperId, storeId, text }) {
       if (typeof text !== 'string' || text.trim().length === 0) throw new AgentError('too_long', 'Say something first!');
       if (text.length > LIMITS.maxChars) throw new AgentError('too_long', `Messages are at most ${LIMITS.maxChars} characters.`);
-      const runtime = applied.get(storeId);
-      if (!runtime) throw new AgentError('unknown_shopper', 'Unknown store.');
-      if (!runtime.online) throw new AgentError('store_offline', 'This store is offline for a moment.');
+      if (!STORE_IDS.includes(storeId)) throw new AgentError('unknown_shopper', 'Unknown store.');
+      const online = runtimes ? runtimes.isOnline(storeId) : !offlineBeforeStart.has(storeId);
+      if (!online) throw new AgentError('store_offline', 'This store is offline for a moment.');
       const shopper = await store.shopper(shopperId);
       if (!shopper) throw new AgentError('unknown_shopper', 'Unknown shopper.');
 
@@ -64,7 +74,9 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
         const history = await conversations.load(conversationId);
         let result;
         try {
-          result = await runShopkeeper({ store, storeId, shopperId, turns: [text], version: runtime.version, history, conversationId });
+          // The version this store has applied right now: after a promotion it may lag for a moment.
+          const version = runtimes?.versionFor(storeId) ?? V0;
+          result = await runShopkeeper({ store, storeId, shopperId, turns: [text], version, history, conversationId });
         } catch (error) {
           if (error instanceof Anthropic.APIError) {
             console.error(`shopkeeper call failed (${error.status ?? 'network'}): ${error.message}`);
@@ -86,12 +98,10 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
     },
 
     async state() {
+      const s = runtimes?.agentState();
       return {
-        activeVersion: 0, learning: false, learningPaused: false,
-        stores: STORE_IDS.map((storeId) => {
-          const r = applied.get(storeId)!;
-          return { storeId, appliedVersion: r.version.version, appliedAt: r.appliedAt, online: r.online };
-        }),
+        activeVersion: s?.activeVersion ?? 0, learning: s?.learning ?? false, learningPaused: s?.learningPaused ?? false,
+        stores: runtimes?.stores() ?? STORE_IDS.map((storeId) => ({ storeId, appliedVersion: 0, appliedAt: null, online: !offlineBeforeStart.has(storeId) })),
       };
     },
 
@@ -103,13 +113,23 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
     async learnNow() { return { started: false, reason: 'Learning is not built yet.' }; },
     async runEval() { throw new AgentError('unavailable', 'Evaluations are not wired to the agent yet.'); },
     async gateDemo() { throw new AgentError('unavailable', 'The gate demo is not built yet.'); },
-    async rollback() { return { fromVersion: 0, toVersion: 0 }; },
+    async rollback() {
+      requireRuntimes();
+      // Every store hears about it from the change bus (the slow poll is the safety net) and records
+      // its time to forget.
+      const { fromVersion, toVersion } = await rollbackActive(deps.db);
+      return { fromVersion, toVersion };
+    },
     async reset() {
+      const r = requireRuntimes();
+      await resetAgentState(deps.db);
       sent.clear();
+      await r.refresh();
     },
     async setStoreOnline(storeId, online) {
-      const r = applied.get(storeId);
-      if (r) r.online = online;
+      if (runtimes) await runtimes.setOnline(storeId, online);
+      else if (online) offlineBeforeStart.delete(storeId);
+      else offlineBeforeStart.add(storeId);
     },
   };
 }
