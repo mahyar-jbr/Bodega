@@ -1,0 +1,108 @@
+import type { Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import express from 'express';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AgentError, type AgentApi, type ChatReply } from '../../shared/contract';
+import { speakable } from './elevenlabs';
+import { createVoiceRouter } from './router';
+
+const KEY = 'test-eleven-key-123';
+const calls: { url: string; init: RequestInit }[] = [];
+let stt: () => Promise<Response>;
+let tts: () => Promise<Response>;
+const fakeFetch = async (url: string, init: RequestInit) => {
+  calls.push({ url, init });
+  return url.includes('/speech-to-text') ? stt() : tts();
+};
+
+const chats: { shopperId: string; storeId: string; text: string }[] = [];
+let chatResult: () => Promise<ChatReply>;
+const agent = { handleMessage: async (input: { shopperId: string; storeId: string; text: string }) => { chats.push(input); return chatResult(); } } as unknown as AgentApi;
+
+let server: Server;
+let base: string;
+beforeAll(async () => {
+  const app = express();
+  app.use(express.json({ limit: '32kb' }));
+  app.use('/api', createVoiceRouter({ agent, fetchImpl: fakeFetch }));
+  server = app.listen(0);
+  await new Promise((r) => server.once('listening', r));
+  base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+});
+afterAll(() => new Promise((r) => server.close(r)));
+
+beforeEach(() => {
+  calls.length = 0;
+  chats.length = 0;
+  vi.stubEnv('ELEVENLABS_API_KEY', KEY);
+  stt = async () => Response.json({ text: ' One large coffee with TORONTO5 please. ' });
+  tts = async () => new Response(new Uint8Array([0x49, 0x44, 0x33, 1, 2, 3]), { headers: { 'content-type': 'audio/mpeg' } });
+  chatResult = async () => ({ reply: "You're all set! ☕ $3.09, order S-1001.", actions: [{ kind: 'order', orderNumber: 'S-1001', totalCents: 309 }], blocked: [], walletCents: 1691 });
+});
+
+function upload(fields: Record<string, string | Blob> = { audio: new Blob([new Uint8Array([1, 2, 3, 4])], { type: 'audio/webm' }), shopperId: 'shopper-1', storeId: 'scarborough' }) {
+  const form = new FormData();
+  for (const [k, v] of Object.entries(fields)) form.append(k, v as never);
+  return fetch(`${base}/api/voice`, { method: 'POST', body: form });
+}
+
+describe('voice line', () => {
+  it('is off without the key', async () => {
+    vi.stubEnv('ELEVENLABS_API_KEY', '');
+    const res = await upload();
+    expect(res.status).toBe(501);
+    expect(await res.json()).toEqual({ error: 'voice_off' });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('transcribes, chats through the agent exactly like typed text, and speaks the reply', async () => {
+    const res = await upload();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.transcript).toBe('One large coffee with TORONTO5 please.');
+    expect(chats).toEqual([{ shopperId: 'shopper-1', storeId: 'scarborough', text: 'One large coffee with TORONTO5 please.' }]);
+    expect(body.reply.actions).toEqual([{ kind: 'order', orderNumber: 'S-1001', totalCents: 309 }]);
+    expect(Buffer.from(body.audio, 'base64')).toEqual(Buffer.from([0x49, 0x44, 0x33, 1, 2, 3]));
+    expect(body.audioType).toBe('audio/mpeg');
+    expect(Object.keys(body.timings)).toEqual(['sttMs', 'chatMs', 'ttsMs']);
+
+    const [sttCall, ttsCall] = calls;
+    expect(sttCall!.url).toBe('https://api.elevenlabs.io/v1/speech-to-text');
+    expect((sttCall!.init.body as FormData).get('model_id')).toBe('scribe_v1');
+    expect((sttCall!.init.headers as Record<string, string>)['xi-api-key']).toBe(KEY);
+    expect(ttsCall!.url).toMatch(/\/v1\/text-to-speech\/JBFqnCBsd6RMkjVDRZzb\?output_format=mp3_44100_64$/);
+    expect(JSON.parse(ttsCall!.init.body as string)).toEqual({ text: "You're all set! $3.09, order S-1001.", model_id: 'eleven_flash_v2_5' });
+    expect(JSON.stringify(body)).not.toContain(KEY);   // the key never reaches the browser
+  });
+
+  it('keeps the chat limits: an agent error maps to its HTTP status, with the transcript', async () => {
+    chatResult = async () => { throw new AgentError('rate_limited', 'One message every couple of seconds, please.'); };
+    const res = await upload();
+    expect(res.status).toBe(429);
+    expect(await res.json()).toEqual({ error: 'rate_limited', transcript: 'One large coffee with TORONTO5 please.' });
+    expect(calls).toHaveLength(1);   // no speech for a refused message
+  });
+
+  it('still answers in text when speech fails, and refuses bad input', async () => {
+    tts = async () => new Response('nope', { status: 503 });
+    const res = await upload();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ audio: null, ttsError: 'tts_failed', transcript: 'One large coffee with TORONTO5 please.' });
+    expect(body.reply.walletCents).toBe(1691);
+
+    expect((await upload({ shopperId: 'shopper-1', storeId: 'scarborough' })).status).toBe(400);
+    expect((await upload({ audio: new Blob([new Uint8Array([1])]), shopperId: 'shopper-1', storeId: 'mars' })).status).toBe(400);
+    stt = async () => Response.json({ text: '   ' });
+    expect((await upload()).status).toBe(422);
+    stt = async () => new Response('down', { status: 500 });
+    const failed = await upload();
+    expect(failed.status).toBe(502);
+    expect(await failed.json()).toEqual({ error: 'stt_failed', status: 500 });
+  });
+
+  it('makes replies speakable', () => {
+    expect(speakable("You're all set! ☕🥧 Order **S-1001**.\n\n🛡 Bodega memory: Queen St saw this trick first."))
+      .toBe("You're all set! Order S-1001. Bodega memory: Queen St saw this trick first.");
+  });
+});

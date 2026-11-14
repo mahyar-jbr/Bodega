@@ -8,6 +8,7 @@ export function createAgent(deps: AgentDeps, options?: AgentOptions): AgentApi {
 }
 
 export { LIMITS } from './agent';
+export { createVoiceRouter } from './voice/router';
 export type { AgentOptions } from './agent';
 export { atlasConversations, memoryConversations, conversationIdFor } from './conversations';
 
