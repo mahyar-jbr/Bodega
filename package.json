@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "concurrently -k -n server,web -c blue,green \"tsx watch src/server/index.ts\" \"vite\"",
     "build": "vite build",
-    "start": "tsx src/server/index.ts",
+    "start": "node --import tsx src/server/index.ts",
     "test": "vitest run",
     "check": "tsc --noEmit",
     "seed": "tsx scripts/seed.ts",
