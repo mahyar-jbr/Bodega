@@ -18,7 +18,8 @@
     "compare": "tsx scripts/compare.ts",
     "try": "tsx scripts/try.ts",
     "smoke": "tsx scripts/smoke.ts",
-    "fresh-show": "tsx scripts/fresh-show.ts"
+    "fresh-show": "tsx scripts/fresh-show.ts",
+    "stage-run": "tsx scripts/stage-run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",
