@@ -15,7 +15,7 @@
 | M2 | v0 gets conned, incidents and cons land in Atlas under the memory rules, and a version rolls out to every store and back | M2-09 | 14:20 | Done |
 | M3 | The stores learn: a version is proven on the held-out set, goes live everywhere, and Roll back takes it back | M3-10, on the deployed app | 15:25 | Done |
 | M4 | The 3-minute demo works end to end, driven only by us, on the live app | M4-10 | 16:00 | Done |
-| Submit | Frozen, submitted and rehearsed | F06, submitted | 16:50 | 4 of 8 |
+| Submit | Frozen, submitted and rehearsed | F06, submitted | 16:50 | 5 of 8 |
 
 **Owners:**
 - **Mahyar** owns the agent side. His PM tab hands each of his tasks to one of two coding tabs.
@@ -103,7 +103,7 @@ Frozen at 16:15, submitted by 16:50 (the deadline is 17:00), and rehearsed by 17
 |---|---|---|---|---|---|
 | F02 | Fixes from testing | Done during the day: the iPhone voice, auto-play, the live transcript, shop tabs surviving a reset, the /stage layout on laptop windows | both | 16:15 | Done |
 | F03 | Code freeze and clean slate | No code pushed after 16:15 (README excepted); at about 16:30 `npm run fresh-show` on the live database (the first learned version reads Policy v1), `npm run smoke` 6/6, then the ops Reset so judging starts on v0 | Mahyar | 16:30 | Not started |
-| F01 | README | Final: the video link, the voice line, the Flow scene, the live test results, and fresh visuals of the Flow scene, the 5-tab /stage and voice (being captured now) | Mahyar | 16:40 | In progress |
+| F01 | README | Final: the video link, the voice line, the Flow scene, the live test results, and fresh visuals of the Flow scene, the 5-tab /stage and voice (being captured now) | Mahyar | 16:40 | Done |
 | F04 | Launch video | The 1-minute launch video, with ElevenLabs narration and two real voice calls to the live app, is on YouTube and linked in the README | Mahyar | 16:30 | Done |
 | F05 | Backup | The launch video (YouTube) and the README's live visuals are the backup: if the live app fails on stage, play the video | Kasra | 16:40 | Done |
 | F06 | Submitted | The repo is checked for personal files and secrets, the `pre-event` tag and the README's "Built at the event" section are in place, and the live link, description, video, problem statement 2 and both of us are on the submission page | Mahyar | 16:50 | Done |
