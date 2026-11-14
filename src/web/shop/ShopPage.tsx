@@ -8,6 +8,8 @@ import { Icon } from '../ui/Icon';
 import { isStoreKey, STORES, type StoreKey } from '../ui/stores';
 import { ensureShopper, readTranscript, saveLocalShopper, saveTranscript, type LocalShopper } from './session';
 import { displayReply, policyLabel, policySnapshot, type PolicyState } from './presentation';
+import { VoiceButton } from './VoiceButton';
+import { friendlyVoiceError, type VoicePhase } from './voice';
 import '../ui/theme.css';
 import './shop.css';
 
@@ -96,6 +98,7 @@ export default function ShopPage() {
   const [policy, setPolicy] = useState<PolicyState>({ version: 0, arrivedAt: null });
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [voicePhase, setVoicePhase] = useState<VoicePhase>('idle');
   const chatEndRef = useRef<HTMLDivElement>(null);
   const policyRef = useRef<PolicyState | null>(null);
 
@@ -107,6 +110,7 @@ export default function ShopPage() {
     setShopper(null);
     setMessages([]);
     setDraft('');
+    setVoicePhase('idle');
     setLoadError(false);
     ensureShopper(store, slot).then((next) => {
       if (!current) return;
@@ -186,7 +190,7 @@ export default function ShopPage() {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages, sending]);
+  }, [messages, sending, voicePhase]);
 
   if (!store) return <MissingStore />;
 
@@ -220,9 +224,30 @@ export default function ShopPage() {
     setMessages([{ id: makeId(), from: 'shopkeeper', text: greeting(next.nickname), time: currentTime() }]);
   }
 
+  function acceptReply(reply: ChatReply, transcript?: string) {
+    setShopper((current) => {
+      if (!current) return current;
+      const next = { ...current, walletCents: reply.walletCents };
+      saveLocalShopper(next, slot);
+      return next;
+    });
+    setMessages((current) => [...current,
+      ...(transcript ? [{ id: makeId(), from: 'customer' as const, text: transcript, time: currentTime() }] : []),
+      { id: makeId(), from: 'shopkeeper', text: reply.reply, actions: reply.actions,
+        blocked: reply.blocked, policyVersion: policy.version, time: currentTime() },
+    ]);
+  }
+
+  function voiceError(error: unknown, transcript?: string) {
+    setMessages((current) => [...current,
+      ...(transcript ? [{ id: makeId(), from: 'customer' as const, text: transcript, time: currentTime() }] : []),
+      { id: makeId(), from: 'system', text: friendlyVoiceError(error), time: currentTime(), error: true },
+    ]);
+  }
+
   async function sendMessage(event?: FormEvent) {
     event?.preventDefault();
-    if (!shopper || sending) return;
+    if (!shopper || sending || voicePhase !== 'idle') return;
     const text = draft.trim();
     if (!text) return;
 
@@ -241,21 +266,7 @@ export default function ShopPage() {
         body: JSON.stringify({ shopperId: shopper.id, storeId: store, text }),
       });
       const reply = parseChatReply(payload);
-      setShopper((current) => {
-        if (!current) return current;
-        const next = { ...current, walletCents: reply.walletCents };
-        saveLocalShopper(next, slot);
-        return next;
-      });
-      setMessages((current) => [...current, {
-        id: makeId(),
-        from: 'shopkeeper',
-        text: reply.reply,
-        actions: reply.actions,
-        blocked: reply.blocked,
-        policyVersion: policy.version,
-        time: currentTime(),
-      }]);
+      acceptReply(reply);
     } catch (error) {
       setMessages((current) => [...current, {
         id: makeId(),
@@ -286,13 +297,13 @@ export default function ShopPage() {
           <section className="shop-chat" aria-label={`Chat with the ${design.name} shopkeeper`} aria-live="polite">
             <div className="shop-chat-spacer" />
             {messages.map((message) => <ChatMessage key={message.id} message={message} store={store} nickname={shopper.nickname} />)}
-            {sending && <TypingIndicator store={store} />}
+            {(sending || voicePhase === 'sending') && <TypingIndicator store={store} />}
             <div ref={chatEndRef} />
           </section>
           <form className="shop-composer" onSubmit={sendMessage}>
             <div className="shop-quick-replies" aria-label="Quick replies">
               {QUICK_REPLIES.map((reply) => (
-                <button type="button" key={reply} onClick={() => setDraft(reply)} disabled={sending}>{reply}</button>
+                <button type="button" key={reply} onClick={() => setDraft(reply)} disabled={sending || voicePhase !== 'idle'}>{reply}</button>
               ))}
             </div>
             <div className="shop-compose-row">
@@ -309,7 +320,9 @@ export default function ShopPage() {
                 />
                 <span className="shop-character-count bd-num">{draft.length}/{MAX_MESSAGE_LENGTH}</span>
               </div>
-              <button className="shop-send-button" type="submit" aria-label="Send message" disabled={sending || !draft.trim()}>
+              <VoiceButton key={shopper.id} shopperId={shopper.id} storeId={store} disabled={sending}
+                onPhase={setVoicePhase} onReply={({ reply, transcript }) => acceptReply(reply, transcript)} onError={voiceError} />
+              <button className="shop-send-button" type="submit" aria-label="Send message" disabled={sending || voicePhase !== 'idle' || !draft.trim()}>
                 <Icon name="arrow-up" size={24} />
               </button>
             </div>
