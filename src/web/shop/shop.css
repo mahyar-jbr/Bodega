@@ -187,7 +187,12 @@
   align-items: flex-start;
   gap: 12px;
   min-width: 0;
+  grid-column: 1;
+  grid-row: 1;
 }
+
+.shop-store-sign p { white-space: nowrap; }
+.shop-live-dot { flex-shrink: 0; }
 
 .shop-store-sign > .bd-awning { margin-top: 7px; }
 
@@ -202,20 +207,26 @@
   white-space: nowrap;
 }
 
-.shop-header-status {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
-}
+.shop-header-status { display: contents; }
 
 .shop-header-status strong,
 .shop-policy { display: inline-flex; align-items: center; gap: 6px; }
 
-.shop-header-status strong { font-size: var(--ui-headline-font-size); font-weight: 600; }
+.shop-header-status strong {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: start;
+  justify-self: end;
+  font-size: var(--ui-headline-font-size);
+  font-weight: 600;
+}
 .shop-header-status strong .bd-icon { color: var(--ink-3); }
 
 .shop-policy {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  justify-self: end;
+  white-space: nowrap;
   min-height: 30px;
   padding: 4px 10px;
   border: 1px solid var(--line-strong);
