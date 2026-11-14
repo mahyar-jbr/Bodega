@@ -63,6 +63,22 @@ describe('governance authentication and optional methods', () => {
     expect(await response.json()).toEqual({ error: 'not_implemented' });
   });
 
+  it('OPS_OPEN=true opens the ops routes without a password; any other value keeps the password', async () => {
+    vi.stubEnv('OPS_OPEN', 'true');
+    vi.stubEnv('OPS_PASSWORD', '');
+    expect((await post('approve', undefined, null)).status).toBe(200);
+    expect(methods.approve).toHaveBeenCalledTimes(1);
+    for (const value of ['', 'false', 'TRUE', '1']) {
+      vi.stubEnv('OPS_OPEN', value);
+      vi.stubEnv('OPS_PASSWORD', 'governance-test');
+      expect((await post('approve', undefined, null)).status).toBe(401);
+      expect((await post('approve', undefined, 'wrong')).status).toBe(401);
+    }
+    expect(methods.approve).toHaveBeenCalledTimes(1);
+    vi.stubEnv('OPS_OPEN', '');
+    expect((await post('approve')).status).toBe(200);
+  });
+
   it('refuses access when ops is not configured', async () => {
     vi.stubEnv('OPS_PASSWORD', '');
     expect((await post('approve')).status).toBe(503);

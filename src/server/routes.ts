@@ -223,6 +223,11 @@ export function createApiRouter({ store, agent, db, opsAutomation, flash, resetD
 }
 
 const requireOpsPassword: RequestHandler = (req, res, next) => {
+  // OPS_OPEN=true is a demo-day switch: the ops routes take no password. Off unless set exactly.
+  if (process.env.OPS_OPEN?.trim() === 'true') {
+    next();
+    return;
+  }
   const expected = process.env.OPS_PASSWORD;
   if (!expected) {
     res.status(503).json({ error: 'ops_not_configured' });
