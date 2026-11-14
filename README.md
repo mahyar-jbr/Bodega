@@ -16,16 +16,13 @@
   <img src="docs/media/learning-loop.gif" width="100%" alt="The learning loop from the live app: the held-out test dots fill, every store turns immune, then a rollback makes every store forget the rule">
 </p>
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/media/immune.png" alt="Policy v2 live at every store: Queen St and Yonge St immune in 0.3 seconds, Scarborough in 0.6, with 60 of 60 held-out scams stopped and 58 of 60 honest customers served"></td>
-    <td width="50%"><img src="docs/media/rollback.png" alt="Policy v2 taken back at every store: each store forgets it in 0.3 seconds, back on v0 with learning paused"></td>
-  </tr>
-  <tr>
-    <td>Every store immune, 0.3 to 0.6 s in this run.</td>
-    <td>Roll back: every store forgets it in 0.3 s, and learning pauses.</td>
-  </tr>
-</table>
+<p align="center"><img src="docs/media/immune.png" width="100%" alt="Policy v2 live at every store: Queen St and Yonge St immune in 0.3 seconds, Scarborough in 0.6, with 60 of 60 held-out scams stopped and 58 of 60 honest customers served"></p>
+
+<p align="center"><em>Every store immune, 0.3 to 0.6 s in this run.</em></p>
+
+<p align="center"><img src="docs/media/rollback.png" width="100%" alt="Policy v2 taken back at every store: each store forgets it in 0.3 seconds, back on v0 with learning paused"></p>
+
+<p align="center"><em>Roll back: every store forgets it in 0.3 s, and learning pauses.</em></p>
 
 ## What it does
 
@@ -39,12 +36,13 @@ Shop agents like this get talked into giving stock away: fake codes, fake member
 - **Every store becomes immune.** Each store picks up the new version on its own and reports how long that took.
 - **Any rule can be taken back.** One tap rolls a version back, and every store forgets it and reports how long that took.
 
-<table>
-  <tr>
-    <td width="34%"><img src="docs/media/phone-shop.png" alt="The Queen St shop on a phone: the shopkeeper greets Lucky Fox 52, sells one iced tea for $2.50 and prints receipt Q-1013, with the wallet at $17.50 and Policy v0 in the header"></td>
-    <td width="66%"><img src="docs/media/stage.png" alt="The presenting laptop's stage view: the big screen with three conned or open stores, the tricks tried so far and the live feed, beside a phone-size shop window with four shopper tabs"><br><br>A shop on a phone (left), and the stage view the room watches: the big screen beside a live shop window (above).</td>
-  </tr>
-</table>
+<p align="center"><img src="docs/media/phone-shop.png" width="360" alt="The Queen St shop on a phone: the shopkeeper greets Lucky Fox 52, sells one iced tea for $2.50 and prints receipt Q-1013, with the wallet at $17.50 and Policy v0 in the header"></p>
+
+<p align="center"><em>A shop on a phone: chat with the shopkeeper, pay with play credits, get a receipt.</em></p>
+
+<p align="center"><img src="docs/media/stage.png" width="100%" alt="The presenting laptop's stage view: the big screen with three conned or open stores, the tricks tried so far and the live feed, beside a phone-size shop window with four shopper tabs"></p>
+
+<p align="center"><em>The stage view the room watches: the big screen beside a live shop window.</em></p>
 
 ## Results
 
@@ -112,16 +110,13 @@ What Bodega remembers, and the rule for each:
 - **One shopper can be forgotten.** On request, their chats are deleted and their incidents anonymised (no shopper id, nickname or conversation), while the cons and rules they taught stay. `forget_log` keeps counts only.
 - **Every con has an audit trail.** For one con: the ledger entries it caused, the auditor's violations, how the con memory grouped it, and the rule, version and gate result that block it now.
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/media/memory-panel.png" alt="The memory panel: the three memory rules, the TTL index line read from Atlas (raw chats expire 24 hours after the last message), and the cons as summaries with the store that first saw each"></td>
-    <td width="50%"><img src="docs/media/audit-trail.png" alt="The audit trail for one con, a refund claimed for an order that never existed: grouped by Atlas Agent Memory with a 0.91 match, three ledger entries with their losses and violations, and nothing blocking it after the rollback"></td>
-  </tr>
-  <tr>
-    <td>What Bodega remembers, and the rules for it.</td>
-    <td>The audit trail for one con, from the ledger to the rule.</td>
-  </tr>
-</table>
+<p align="center"><img src="docs/media/memory-panel.png" width="100%" alt="The memory panel: the three memory rules, the TTL index line read from Atlas (raw chats expire 24 hours after the last message), and the cons as summaries with the store that first saw each"></p>
+
+<p align="center"><em>What Bodega remembers, and the rules for it.</em></p>
+
+<p align="center"><img src="docs/media/audit-trail.png" width="100%" alt="The audit trail for one con, a refund claimed for an order that never existed: grouped by Atlas Agent Memory with a 0.91 match, three ledger entries with their losses and violations, and nothing blocking it after the rollback"></p>
+
+<p align="center"><em>The audit trail for one con, from the ledger to the rule.</em></p>
 
 ## How it works
 
