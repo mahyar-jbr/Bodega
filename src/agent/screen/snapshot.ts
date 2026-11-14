@@ -1,7 +1,7 @@
 // The big screen's view of the chain, built on the agent side and served inside agent.state() as
 // `screen`, so the screen never reads collections itself. Summaries, titles, nicknames and numbers
 // only: no raw customer text ever goes in here.
-import type { Db } from 'mongodb';
+import { ObjectId, type Db } from 'mongodb';
 import type { StoreApi, StoreId } from '../../shared/contract';
 import type { AgentMetrics, IncidentDoc, MetricPoint } from '../auditor/auditor';
 import type { EvaluationDoc } from '../eval/record';
@@ -73,6 +73,14 @@ export interface AuditTrail {
   };
 }
 
+// Eng 1's learning cycles (src/agent/learner): one document per cycle.
+interface LearningRunDoc {
+  _id: unknown; epoch: number; trigger: 'auto' | 'now'; cons: string[];
+  phase: 'learning' | 'gating' | 'promoted' | 'rejected' | 'failed';
+  attempts: { attempt: number; version: number; title: string; rules: string[]; verdict?: string; reasons?: string[]; evaluationId?: string; learnMs?: number }[];
+  startedAt: Date; finishedAt: Date | null; error?: string | null;
+}
+
 export interface SnapshotDeps {
   db: Db;
   store: StoreApi;
@@ -116,37 +124,47 @@ export async function screenSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot
     blocked: blockedPerCon.get(c._id) ?? 0, coveredBy: c.coveredBy,
   }));
 
-  // ── Learning: the newest candidate, its held-out test and verdict ──
+  // ── Learning: the newest learning cycle (learning_runs), its attempt's held-out test and verdict ──
+  const run = await db.collection<LearningRunDoc>('learning_runs').find({ epoch }).sort({ startedAt: -1 }).limit(1).next();
   const newest = guardrails.find((g) => g.source !== 'v0');
-  const changedAt = state?.changedAt ?? new Date(0);
-  const newestIsFresh = newest && newest.createdAt >= changedAt;
   let learning: ScreenSnapshot['learning'] = null;
-  if (state?.learning || newest) {
-    const test = newest ? recentEvals.find((e) => e.version === newest._id) : undefined;
-    const phase: NonNullable<ScreenSnapshot['learning']>['phase'] =
-      state?.learning && !newestIsFresh ? 'drafting'
+  const attempt = run?.attempts.at(-1);
+  const testEval = attempt?.evaluationId
+    ? evaluations.find((e) => e._id.toHexString() === attempt.evaluationId)
+      ?? await db.collection<EvaluationDoc>('evaluations').findOne({ _id: new ObjectId(attempt.evaluationId) })
+    : !run && newest ? recentEvals.find((e) => e.version === newest._id) : undefined;
+  if (run || state?.learning || newest) {
+    const phase: NonNullable<ScreenSnapshot['learning']>['phase'] = run
+      ? run.phase === 'learning' ? (attempt ? 'drafting' : 'incident')
+        : run.phase === 'gating' ? 'testing'
+        : run.phase === 'promoted' ? 'promoted'
+        : 'rejected'
+      : state?.learning ? 'drafting'
       : !newest ? 'incident'
       : newest.status === 'promoted' || newest.status === 'rolled_back' ? 'promoted'
-      : newest.status === 'rejected' ? 'rejected'
-      : test ? 'testing' : 'drafting';
-    const coveredIds = new Set(newest?.cons ?? []);
-    const trigger = incidents.find((i) => i.conId && coveredIds.has(i.conId)) ?? incidents[0];
-    const s = test?.summary;
+      : newest.status === 'rejected' ? 'rejected' : testEval ? 'testing' : 'drafting';
+    const conIds = new Set(run?.cons ?? newest?.cons ?? []);
+    const trigger = incidents.find((i) => i.conId && conIds.has(i.conId)) ?? incidents[0];
+    const s = testEval?.summary;
     const scamsTotal = s?.scams.total ?? 60, honestTotal = s?.honest.total ?? 60;
-    learning = trigger || newest ? {
+    const versionNo = attempt?.version ?? newest?._id ?? activeVersion + 1;
+    const rules = attempt?.rules ?? byVersion.get(versionNo)?.rules.map((r) => r.title) ?? [];
+    const reasons = attempt?.reasons ?? [];
+    learning = trigger || run || newest ? {
       phase,
-      store: (cons.find((c) => coveredIds.has(c._id))?.firstSeenStore) ?? trigger?.storeId ?? 'queen',
+      store: (cons.find((c) => conIds.has(c._id))?.firstSeenStore) ?? trigger?.storeId ?? 'queen',
       incident: trigger
-        ? { summary: trigger.summary, detail: `${trigger.kind === 'refund' ? 'A refund' : 'A sale'} at ${STORE_NAME[trigger.storeId]}`, lostCents: trigger.lossCents }
+        ? { summary: trigger.summary, detail: `${trigger.kind === 'refund' ? 'A refund' : 'A sale'} at ${STORE_NAME[trigger.storeId]}${conIds.size > 1 ? `, and ${conIds.size - 1} more ${conIds.size === 2 ? 'con' : 'cons'}` : ''}`, lostCents: trigger.lossCents }
         : { summary: 'A new con', detail: '', lostCents: 0 },
-      guardrail: { version: newest?._id ?? activeVersion + 1, rules: newest?.rules.map((r) => r.title) ?? [] },
-      test: test?.progress ?? { done: 0, total: scamsTotal + honestTotal, scamsTested: 0, scamsStopped: 0, honestTested: 0, honestServed: 0 },
+      guardrail: { version: versionNo, rules },
+      test: testEval?.progress ?? { done: 0, total: scamsTotal + honestTotal, scamsTested: 0, scamsStopped: 0, honestTested: 0, honestServed: 0 },
       scamsTotal, honestTotal,
-      settingsHash: test?.settingsHash ?? deps.settingsHash,
-      verdict: !s || (phase !== 'promoted' && phase !== 'rejected') ? null
-        : phase === 'promoted'
-          ? `Promoted: scams that work ${s.scams.successPct}%, ${s.honest.turnedAway} of ${s.honest.total} honest turned away`
-          : `Rejected: scams that work ${s.scams.successPct}%, ${s.honest.turnedAway} of ${s.honest.total} honest turned away`,
+      settingsHash: testEval?.settingsHash ?? deps.settingsHash,
+      verdict: phase === 'promoted'
+        ? (s ? `Promoted: scams that work ${s.scams.successPct}%, ${s.honest.turnedAway} of ${s.honest.total} honest turned away` : 'Promoted')
+        : phase === 'rejected'
+          ? `Rejected: ${reasons[0] ?? (run?.phase === 'failed' ? 'the run failed' : 'it did not beat the current version')}`
+          : null,
     } : null;
   }
 
@@ -277,11 +295,13 @@ export async function screenSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot
   ].sort((a, b) => b.at.localeCompare(a.at)).slice(0, FEED_MAX);
 
   // ── The scene the state suggests ──
+  const changedAt = state?.changedAt ?? new Date(0);
   const sinceChange = Date.now() - changedAt.getTime();
   const scene: Scene =
     state?.change === 'rollback' && sinceChange < 60_000 ? 'immunity'
     : learning && (learning.phase === 'drafting' || learning.phase === 'testing') ? 'learning'
-    : learning?.phase === 'rejected' && newest && Date.now() - newest.createdAt.getTime() < 60_000 ? 'learning'
+    : learning?.phase === 'rejected' && run?.finishedAt && Date.now() - run.finishedAt.getTime() < 60_000 ? 'learning'
+    : learning?.phase === 'rejected' && !run && newest && Date.now() - newest.createdAt.getTime() < 60_000 ? 'learning'
     : state?.change === 'promote' && sinceChange < 30_000 ? 'immunity'
     : activeVersion > 0 ? 'round2' : 'round1';
 
