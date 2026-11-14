@@ -4,7 +4,7 @@
 import { ObjectId, type Db } from 'mongodb';
 import type { StoreApi, StoreId } from '../../shared/contract';
 import type { AgentMetrics, IncidentDoc, MetricPoint } from '../auditor/auditor';
-import type { EvaluationDoc } from '../eval/record';
+import { sweepInterruptedEvaluations, type EvaluationDoc } from '../eval/record';
 import type { ConDoc } from '../memory/con-memory';
 import { AGENT_STATE, CONS, GUARDRAILS, INCIDENTS, ROLLOUTS, type AgentStateDoc, type GuardrailDoc } from '../rollout/state';
 import type { RolloutDoc } from '../rollout/runtimes';
@@ -97,8 +97,18 @@ const short = (s: string, n = 36) => (s.length <= n ? s : `${s.slice(0, n - 1).t
 const SNAPSHOT_TTL_MS = 750;
 let cached: { db: string; at: number; value: Promise<ScreenSnapshot> } | null = null;
 
+// Interrupted evaluations are swept once when a process first serves the screen, then every 30 s.
+const SWEEP_EVERY_MS = 30_000;
+let lastSweep: { db: string; at: number } | null = null;
+
 export function screenSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
   const now = Date.now();
+  if (!lastSweep || lastSweep.db !== deps.db.databaseName || now - lastSweep.at > SWEEP_EVERY_MS) {
+    lastSweep = { db: deps.db.databaseName, at: now };
+    sweepInterruptedEvaluations(deps.db)
+      .then((n) => { if (n) console.log(`evaluations: marked ${n} interrupted run(s) as failed`); })
+      .catch((e) => console.error('evaluation sweep failed:', e));
+  }
   if (cached && cached.db === deps.db.databaseName && now - cached.at < SNAPSHOT_TTL_MS) return cached.value;
   const value = buildSnapshot(deps);
   cached = { db: deps.db.databaseName, at: now, value };

@@ -20,11 +20,15 @@ export interface EvaluationDoc {
   summary: EvalSummary | null;
   cases?: { id: string; outcome: string; lossCents: number; detail: string }[];   // dev only
   error?: string;
+  heartbeatAt?: Date;                    // refreshed every few seconds while the run's process is alive
   startedAt: Date;
   finishedAt: Date | null;
 }
 
 const PROGRESS_EVERY_MS = 400;
+const HEARTBEAT_MS = 5_000;
+const STALE_HEARTBEAT_MS = 30_000;       // a running evaluation silent this long lost its process
+const STALE_START_MS = 2 * 60_000;       // older runs from before heartbeats existed
 
 /** The code a run used: Render's deploy commit (it has no .git), else the local checkout's. */
 let localCommit: string | null | undefined;
@@ -46,7 +50,7 @@ export async function recordEvaluation(db: Db, input: RunEvalInput & { purpose: 
   const total = input.cases.length;
   await coll.insertOne({
     _id, set: input.set, version: input.version.version, settingsHash, purpose: input.purpose, commit: input.commit ?? currentCommit(),
-    status: 'running', progress: { done: 0, total, scamsTested: 0, scamsStopped: 0, honestTested: 0, honestServed: 0 },
+    status: 'running', heartbeatAt: new Date(), progress: { done: 0, total, scamsTested: 0, scamsStopped: 0, honestTested: 0, honestServed: 0 },
     summary: null, startedAt: new Date(), finishedAt: null,
   });
   input.onStart?.(_id.toHexString());
@@ -61,10 +65,11 @@ export async function recordEvaluation(db: Db, input: RunEvalInput & { purpose: 
     try { await coll.updateOne({ _id, status: 'running' }, { $set: { progress: p } }); } finally { writing = false; }
   };
   const timer = setInterval(() => void flush().catch(() => {}), PROGRESS_EVERY_MS);
+  const heartbeat = setInterval(() => void coll.updateOne({ _id, status: 'running' }, { $set: { heartbeatAt: new Date() } }).catch(() => {}), HEARTBEAT_MS);
 
   try {
     const run = await runEvaluation({ ...input, settingsHash, onProgress: (p) => { latest = p; input.onProgress?.(p); } });
-    clearInterval(timer);
+    clearInterval(timer); clearInterval(heartbeat);
     await coll.updateOne({ _id }, { $set: {
       status: 'done', finishedAt: new Date(), summary: run.summary,
       progress: { done: total, total,
@@ -74,8 +79,21 @@ export async function recordEvaluation(db: Db, input: RunEvalInput & { purpose: 
     } });
     return { ...run, evaluationId: _id.toHexString() };
   } catch (err) {
-    clearInterval(timer);
+    clearInterval(timer); clearInterval(heartbeat);
     await coll.updateOne({ _id }, { $set: { status: 'failed', finishedAt: new Date(), error: String(err).slice(0, 300) } });
     throw err;
   }
+}
+
+/** Marks evaluations whose process died mid-run (a redeploy or a crash) as failed, so the screen never
+ *  shows a test that will never finish. Returns how many it marked. */
+export async function sweepInterruptedEvaluations(db: Db, now = new Date()): Promise<number> {
+  const res = await db.collection<EvaluationDoc>('evaluations').updateMany(
+    { status: 'running', $or: [
+      { heartbeatAt: { $lt: new Date(now.getTime() - STALE_HEARTBEAT_MS) } },
+      { heartbeatAt: { $exists: false }, startedAt: { $lt: new Date(now.getTime() - STALE_START_MS) } },
+    ] },
+    { $set: { status: 'failed', error: 'interrupted by a restart', finishedAt: now } },
+  );
+  return res.modifiedCount;
 }
