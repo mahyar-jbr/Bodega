@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import express, { type ErrorRequestHandler, type Express } from 'express';
 import { createSseRouter, type SseRouteDeps } from '../realtime/routes';
 import { pingDb } from '../shared/db';
+import { createVoiceRouter } from '../agent';
 import { createApiRouter, type RouteDeps } from './routes';
 
 const DEFAULT_DIST = fileURLToPath(new URL('../../dist', import.meta.url));
@@ -23,6 +24,7 @@ export function createApp({ distDir = DEFAULT_DIST, api, realtime }:
   // ── API routes are mounted here, above the 404 below. ──
   if (realtime) app.use(createSseRouter(realtime));
   if (api) app.use('/api', createApiRouter(api));
+  if (api) app.use('/api', createVoiceRouter({ agent: api.agent }));
 
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'not_found' });
