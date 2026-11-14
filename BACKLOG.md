@@ -93,7 +93,7 @@ The 3-minute demo works end to end from a reset, driven only by us. If M3 is gre
 | M4-03 | Immunity, forget and numbers | It shows each store's time to immunity and, after a rollback, its time to forget and that learning is paused, the money blocked, and the before and after numbers | Mahyar | 15:20 | In progress |
 | M4-07 | Memory panel | Each con's summary, first store and covering version, under the three memory rules. Cut 3 keeps only the rules | Mahyar | 15:45 | In progress |
 | M4-08 | Version chart | Scam success and honest service across versions. Cut 2: only if time is left | Mahyar | 15:45 | Done |
-| M4-10 | **M4 check, recorded** | **M4 check** | The stage demo works end to end on the live app, from a reset and driven only by us, including the learning loop for the judges. No recording (decided 11:55); the helper's /screen capture during the run feeds the launch video | 16:00 | Not started |
+| M4-10 | **M4 check** | The stage demo works end to end on the live app, from a reset and driven only by us, including the learning loop for the judges. No recording (decided 11:55); the helper's /screen capture during the run feeds the launch video | both | 16:00 | Not started |
 
 ## Submit by 16:50
 
