@@ -71,7 +71,7 @@ A version learned from the cons is proven on 120 held-out cases with the same mo
 | ID | Task | Done when | Owner | By | State |
 |---|---|---|---|---|---|
 | M3-01 | Eval runner | It scores the dev and held-out sets on fresh in-memory stores, per category, with live progress, using M2-01's facts | Mahyar | 12:10 | Not started |
-| M3-02 | Seal test | A test fails if any file except gate/heldout.ts names heldout.jsonl | helper | 12:30 | In progress |
+| M3-02 | Seal test | A test fails if any file except gate/heldout.ts names heldout.jsonl | helper | 12:30 | Done |
 | M3-03 | v0 baseline | v0's held-out baseline is measured twice, and again after any tuning | Mahyar | 13:35 | Not started |
 | M3-04 | v0 checked and frozen | v0 lets 30% to 50% of held-out scams through and serves at least 95% of honest cases (tuned on dev only), and the shopkeeper's settings (model, effort, tools, full prompt) are frozen into one hash. Nobody else edits the shopkeeper's files until then | Mahyar | 14:05 | Not started |
 | M3-07 | `npm run compare` | It prints v0 against the newest version, per category, with matching settings hashes | Mahyar | 14:15 | Not started |
