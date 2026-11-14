@@ -1,0 +1,119 @@
+{
+  "voice": {
+    "id": "nPczCjzI2devNBz1zQrb",
+    "name": "Brian - Deep, Resonant and Comforting"
+  },
+  "model": "eleven_multilingual_v2",
+  "format": "mp3_44100_128",
+  "generatedAt": "2026-11-14T17:36:04.518Z",
+  "lines": [
+    {
+      "id": "vo01-hook",
+      "file": "voiceover/vo01-hook.mp3",
+      "startS": 0.3,
+      "maxS": 4.4,
+      "durationS": 2.64,
+      "overMax": false,
+      "voiceName": "Brian - Deep, Resonant and Comforting",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "model": "eleven_multilingual_v2",
+      "text": "AI shop agents get conned. Over and over."
+    },
+    {
+      "id": "vo02-bodega",
+      "file": "voiceover/vo02-bodega.mp3",
+      "startS": 5.3,
+      "maxS": 3.9,
+      "durationS": 2.95,
+      "overMax": false,
+      "voiceName": "Brian - Deep, Resonant and Comforting",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "model": "eleven_multilingual_v2",
+      "text": "Bodega: three AI stores, one shared memory."
+    },
+    {
+      "id": "vo03-learn",
+      "file": "voiceover/vo03-learn.mp3",
+      "startS": 9.8,
+      "maxS": 7.4,
+      "durationS": 4.49,
+      "overMax": false,
+      "voiceName": "Brian - Deep, Resonant and Comforting",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "model": "eleven_multilingual_v2",
+      "text": "When a con works once, Bodega learns the trick and writes a guardrail in plain words."
+    },
+    {
+      "id": "vo04-prove",
+      "file": "voiceover/vo04-prove.mp3",
+      "startS": 17.8,
+      "maxS": 8.4,
+      "durationS": 4.86,
+      "overMax": false,
+      "voiceName": "Brian - Deep, Resonant and Comforting",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "model": "eleven_multilingual_v2",
+      "text": "It proves the rule on a hundred and twenty cases it has never seen, with the same model."
+    },
+    {
+      "id": "vo05-spread",
+      "file": "voiceover/vo05-spread.mp3",
+      "startS": 26.8,
+      "maxS": 7.4,
+      "durationS": 5.8,
+      "overMax": false,
+      "voiceName": "Brian - Deep, Resonant and Comforting",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "model": "eleven_multilingual_v2",
+      "text": "Once it passes, Atlas change streams make every store immune in three hundred and twenty milliseconds."
+    },
+    {
+      "id": "vo06-built",
+      "file": "voiceover/vo06-built.mp3",
+      "startS": 34.8,
+      "maxS": 6.4,
+      "durationS": 4.6,
+      "overMax": false,
+      "voiceName": "Brian - Deep, Resonant and Comforting",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "model": "eleven_multilingual_v2",
+      "text": "Only the harness learns. The model never changes, and it works around any agent."
+    },
+    {
+      "id": "vo07-govern",
+      "file": "voiceover/vo07-govern.mp3",
+      "startS": 41.8,
+      "maxS": 6.9,
+      "durationS": 4.55,
+      "overMax": false,
+      "voiceName": "Brian - Deep, Resonant and Comforting",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "model": "eleven_multilingual_v2",
+      "text": "Chats expire in a day, and one tap takes any rule back, everywhere."
+    },
+    {
+      "id": "vo08-results",
+      "file": "voiceover/vo08-results.mp3",
+      "startS": 49.2,
+      "maxS": 5.9,
+      "durationS": 4.62,
+      "overMax": false,
+      "voiceName": "Brian - Deep, Resonant and Comforting",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "model": "eleven_multilingual_v2",
+      "text": "Scams drop from sixty percent to zero. Honest customers still get served."
+    },
+    {
+      "id": "vo09-end",
+      "file": "voiceover/vo09-end.mp3",
+      "startS": 55.7,
+      "maxS": 3.6,
+      "durationS": 2.12,
+      "overMax": false,
+      "voiceName": "Brian - Deep, Resonant and Comforting",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "model": "eleven_multilingual_v2",
+      "text": "Bodega. Memory you can govern."
+    }
+  ]
+}
