@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router';
 import OpsPage from './ops/OpsPage';
 import ScreenPage from './screen/ScreenPage';
+import StagePage from './screen/StagePage';
 import ShopPage from './shop/ShopPage';
 
 export default function App() {
@@ -8,6 +9,7 @@ export default function App() {
     <Routes>
       <Route path="/s/:storeId" element={<ShopPage />} />
       <Route path="/screen" element={<ScreenPage />} />
+      <Route path="/stage" element={<StagePage />} />
       <Route path="/ops" element={<OpsPage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
