@@ -7,6 +7,7 @@ import type { AgentMetrics, IncidentDoc, MetricPoint } from '../auditor/auditor'
 import { sweepInterruptedEvaluations, type EvaluationDoc } from '../eval/record';
 import type { ConDoc } from '../memory/con-memory';
 import { TTL_INDEX } from '../memory/memory-rules';
+import { recentFlow } from '../flow-events';
 import { buildFlow, type FlowInputs, type FlowView } from './flow';
 import { MEMORY_PROOFS, type MemoryProof } from '../memory-proof';
 import { AGENT_STATE, CONS, GUARDRAILS, INCIDENTS, ROLLOUTS, type AgentStateDoc, type GuardrailDoc } from '../rollout/state';
@@ -508,9 +509,7 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
     const block = blocks.find((b) => b.ts >= epochStart);
     const blockCon = block ? cons.find((c) => (ruleCons.get(`${block.version}:${block.ruleId}`) ?? []).includes(c._id)) : undefined;
     const testEvalDoc = learning ? evaluations.find((e) => e.version === learning!.guardrail.version && e.startedAt >= epochStart) : undefined;
-    const flowEvents = await db.collection<{ at: Date | string; node: string; storeId: StoreId | null; value: string; ms?: number | null;
-      score?: number | null; version?: number | null; cents?: number | null; firstSeenStore?: StoreId | null }>('flow_events')
-      .find({}).sort({ _id: -1 }).limit(120).toArray().catch(() => []);
+    const flowEvents = await recentFlow(db, epoch, 120).catch(() => []);   // this epoch only, newest 120
     const inputs: FlowInputs = {
       now: Date.now(), hash: deps.settingsHash, activeVersion,
       incident: inc ? { nickname: inc.nickname, storeId: inc.storeId, kind: inc.kind, lossCents: inc.lossCents, violations: inc.violations,
@@ -534,7 +533,7 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
         firstSeenStore: blockCon?.firstSeenStore ?? null, version: block.version ?? null, at: block.ts } : null,
       rollback: lastRollback ? { from: lastRollback.from, to: lastRollback.to, at: lastRollback.at,
         stores: STORES.map((st) => ({ store: st, ms: rollbackRows.find((r) => r.storeId === st)?.ms ?? null })) } : null,
-      events: flowEvents.map((e) => ({ ...e, at: new Date(e.at) })).filter((e) => e.at >= epochStart).reverse(),
+      events: flowEvents.map((e) => ({ ...e, at: new Date(e.at) })).filter((e) => e.at >= epochStart),
     };
     return buildFlow(inputs);
   }

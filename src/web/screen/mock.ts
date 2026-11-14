@@ -65,22 +65,7 @@ export const MOCK: ScreenData = {
   }],
   memory: { proof: { at: ago(5).toISOString(), refused: true, code: 121, message: 'Document failed validation', collection: 'incidents', field: 'text' },
     ttlSeconds: 86_400, forgotten: 1 },
-  flow: buildFlow({
-    now: Date.now(), hash: '6adbcc65b15bc033c4cb5aad921eca17af4ed709e768632c7b5fe0f82df4b345', activeVersion: 1,
-    incident: { nickname: 'Sneaky Raccoon', storeId: 'queen', kind: 'refund', lossCents: 950, violations: ['refund_no_order'],
-      title: 'refund for nothing', summary: 'Refund for a soggy sandwich never bought', orderNumber: null, conId: 'c1', at: ago(70), createdAt: ago(69.9) },
-    con: { grouping: 'agent-memory', matchScore: 0.88, incidents: 3, firstSeenStore: 'queen', lastSeenAt: ago(69) },
-    honest: null,
-    learning: { phase: 'promoted', rules: ['A refund needs an order this shopper paid', 'Every item at list price or more', 'A discount needs a real code'],
-      ruleCount: 3, version: 1, startedAt: ago(58), test: { done: 120, total: 120, scamsTested: 60, scamsStopped: 60, honestTested: 60, honestServed: 57 },
-      scamsTotal: 60, honestTotal: 60, testStartedAt: ago(45), testFinishedAt: ago(28), verdict: 'Promoted' },
-    promoted: { version: 1, at: ago(27), status: 'promoted' },
-    rollout: { kind: 'immune', version: 1, toVersion: 1, at: ago(27), lastAppliedAt: ago(26.7),
-      stores: [{ store: 'queen', ms: 320 }, { store: 'yonge', ms: 320 }, { store: 'scarborough', ms: 319 }] },
-    block: { nickname: 'Midnight Moose', storeId: 'yonge', title: 'A refund needs an order this shopper paid', firstSeenStore: 'queen', version: 1, at: ago(9) },
-    rollback: null,
-    events: [],
-  }),
+  flow: mockFlow(typeof location !== 'undefined' ? new URLSearchParams(location.search).get('moment') : null),
   flash: { store: 'queen', attempted: 100, sold: 10, stock: 10, stockAfter: 0, oversold: 0, walletsMatchLedger: true,
     noNegativeWallets: true, passed: true, durationMs: 1_840, at: ago(30).toISOString() },
   results: {
@@ -90,3 +75,32 @@ export const MOCK: ScreenData = {
     immunityMs: 1_580,
   },
 };
+
+/** The Flow scene at one moment of a run (?mock=1&scene=flow&moment=con|gate|immune|block|honest|rollback). */
+function mockFlow(moment: string | null) {
+  const order = ['con', 'gate', 'immune', 'block', 'honest', 'rollback'];
+  const upTo = Math.max(0, order.indexOf(moment ?? 'block'));
+  const has = (m: string) => order.indexOf(m) <= upTo;
+  const t = (step: string, s: number) => (moment === step ? ago(s) : ago(s + 40 * (upTo - order.indexOf(step))));
+  const conAt = t('con', 1.5);
+  const gateDone = upTo > order.indexOf('gate');
+  return buildFlow({
+    now: Date.now(), hash: '6adbcc65b15bc033c4cb5aad921eca17af4ed709e768632c7b5fe0f82df4b345', activeVersion: has('immune') && !has('rollback') ? 1 : 0,
+    incident: { nickname: 'Mellow Lynx 92', storeId: 'queen', kind: 'refund', lossCents: 950, violations: ['refund_no_order'],
+      title: 'Refund claimed for an order that never existed', summary: 'Refund claimed for an order that never existed',
+      orderNumber: null, conId: 'c1', at: new Date(conAt.getTime() - 400), createdAt: new Date(conAt.getTime() - 100) },
+    con: { grouping: 'agent-memory', matchScore: 0.88, incidents: 2, firstSeenStore: 'queen', lastSeenAt: conAt },
+    honest: has('honest') ? { nickname: 'Sunny Loon 83', storeId: 'scarborough', number: 'S-1001', totalCents: 309, codePct: 5, code: 'TORONTO5', at: t('honest', 1.5) } : null,
+    learning: has('gate') ? { phase: gateDone ? 'promoted' : 'testing', rules: ['A refund needs an order this shopper paid for', 'Every item at list price or more', 'A discount needs a real code'],
+      ruleCount: 3, version: 1, startedAt: t('gate', 30), scamsTotal: 60, honestTotal: 60, verdict: gateDone ? 'Promoted' : null,
+      test: gateDone ? { done: 120, total: 120, scamsTested: 60, scamsStopped: 60, honestTested: 60, honestServed: 59 }
+        : { done: 84, total: 120, scamsTested: 42, scamsStopped: 42, honestTested: 42, honestServed: 41 },
+      testStartedAt: t('gate', 1.5), testFinishedAt: gateDone ? t('gate', 1) : null } : null,
+    promoted: has('immune') ? { version: 1, at: t('immune', 2), status: 'promoted' } : null,
+    rollout: has('immune') ? { kind: 'immune', version: 1, toVersion: 1, at: t('immune', 2), lastAppliedAt: t('immune', 1.6),
+      stores: [{ store: 'queen', ms: 320 }, { store: 'yonge', ms: 320 }, { store: 'scarborough', ms: 319 }] } : null,
+    block: has('block') ? { nickname: 'Midnight Moose', storeId: 'yonge', title: 'A refund needs an order this shopper paid for', firstSeenStore: 'queen', version: 1, at: t('block', 1.5) } : null,
+    rollback: has('rollback') ? { from: 1, to: 0, at: t('rollback', 1.5), stores: [{ store: 'queen', ms: 247 }, { store: 'yonge', ms: 249 }, { store: 'scarborough', ms: 249 }] } : null,
+    events: [],
+  });
+}

@@ -16,6 +16,7 @@ export interface FlowNode {
   detail: string | null;         // a second, smaller line
   at: string | null;             // when it last happened
   tone: 'loss' | 'immune' | 'served' | 'learning' | null;
+  stores?: { store: StoreId; ms: number | null }[];   // the store runtimes and the rollback: per-store timings
 }
 
 export interface FlowView {
@@ -24,6 +25,7 @@ export interface FlowView {
   activeAt: string | null;
   narration: string | null;      // one line for the room
   narrationTone: 'loss' | 'immune' | 'served' | 'learning' | null;
+  photo: { version: number; ms: number; at: string } | null;   // every store immune: the moment to hold on
   gate: { done: number; total: number; scamsStopped: number; scamsTested: number; honestServed: number; honestTested: number; scamsTotal: number; honestTotal: number } | null;
   hash: string;
 }
@@ -65,6 +67,8 @@ const storeMs = (stores: { store: StoreId; ms: number | null }[]) => {
   const all = stores.every((s) => s.ms != null && s.ms < 1000);
   return stores.map((s) => `${INITIAL[s.store]} ${all ? Math.round(s.ms!) : ms(s.ms)}`).join(' · ') + (all ? ' ms' : '');
 };
+/** "0.3 s": the photo line rounds to a tenth of a second. */
+const secs = (n: number) => `${(n / 1000).toFixed(1)} s`;
 const storeMsLong = (stores: { store: StoreId; ms: number | null }[]) =>
   stores.map((s) => `${STORE_NAME[s.store]} ${ms(s.ms)}`).join(', ');
 
@@ -87,7 +91,7 @@ export function buildFlow(x: FlowInputs): FlowView {
     const lag = i.createdAt.getTime() - i.at.getTime();
     set('ledgerStream', new Date(i.createdAt.getTime() - 1), 'ledger insert', `${ms(Math.max(0, lag))} to the auditor`);
     set('auditor', i.createdAt, 'no valid basis', VIOLATION_WORDS[i.violations[0]] ?? i.violations[0] ?? null, 'loss');
-    set('incident', i.createdAt, i.summary, `${money(i.lossCents)} lost`, 'loss');
+    set('incident', i.createdAt, `${money(i.lossCents)} lost`, i.summary, 'loss');
   }
   if (x.con) {
     const c = x.con;
@@ -106,8 +110,8 @@ export function buildFlow(x: FlowInputs): FlowView {
       gate = { ...l.test, scamsTotal: l.scamsTotal, honestTotal: l.honestTotal };
       const done = l.test.done >= l.test.total && l.phase !== 'testing';
       set('gate', done ? l.testFinishedAt ?? l.testStartedAt : l.testStartedAt,
-        done ? (l.phase === 'rejected' ? 'rejected' : 'passed') : `${l.test.done} of ${l.test.total}`,
-        `same model ${x.hash.slice(0, 8)}`, l.phase === 'rejected' ? 'loss' : done ? 'immune' : 'learning');
+        done ? (l.phase === 'rejected' ? 'rejected' : `${l.test.scamsStopped} of ${l.scamsTotal} stopped`) : `${l.test.done} of ${l.test.total}`,
+        done && l.phase !== 'rejected' ? `${l.test.honestServed} of ${l.honestTotal} honest served` : `same model ${x.hash.slice(0, 8)}`, l.phase === 'rejected' ? 'loss' : done ? 'immune' : 'learning');
     }
   }
 
@@ -118,20 +122,24 @@ export function buildFlow(x: FlowInputs): FlowView {
     set('guardrail', p.at, waiting ? `v${p.version} waiting` : `v${p.version} promoted`, waiting ? 'for a person to approve' : 'versioned in Atlas', waiting ? 'learning' : 'immune');
     if (!waiting) set('stateStream', new Date(p.at.getTime() + 1), `v${p.version} sent`, 'to every store', 'immune');
   }
+  let photo: FlowView['photo'] = null;
   if (x.rollout && x.rollout.kind === 'immune') {
     const r = x.rollout;
     const all = r.stores.every((s) => s.ms != null);
     set('runtimes', r.lastAppliedAt ?? r.at, all ? `immune in ${ms(Math.max(...r.stores.map((s) => s.ms ?? 0)))}` : 'applying…', storeMs(r.stores), 'immune');
+    nodes.get('runtimes')!.stores = r.stores;
+    if (all) photo = { version: r.version, ms: Math.max(...r.stores.map((s) => s.ms ?? 0)), at: (r.lastAppliedAt ?? r.at).toISOString() };
   }
   if (x.block) {
     const b = x.block;
     set('guard', new Date(b.at.getTime() - 1), 'blocked', b.title ? `rule: ${b.title}` : 'a learned rule', 'immune');   // round 2 stops at the same guard
-    set('block', b.at, `blocked at ${STORE_NAME[b.storeId]}`, b.firstSeenStore ? `${STORE_NAME[b.firstSeenStore]} saw it first` : b.title, 'immune');
+    set('block', b.at, `blocked at ${STORE_NAME[b.storeId]}`, b.title, 'immune');   // the detail: the rule that stopped it
   }
   if (x.rollback) {
     const r = x.rollback;
     const all = r.stores.every((s) => s.ms != null);
     set('rollback', r.at, `v${r.from} → v${r.to}`, all ? `forgot: ${storeMs(r.stores)}` : 'stores forgetting…', 'learning');
+    nodes.get('rollback')!.stores = r.stores;
   }
 
   // An honest purchase: the guard lets it through (the room should see it's not blocking everyone).
@@ -164,7 +172,7 @@ export function buildFlow(x: FlowInputs): FlowView {
   const newest = list.filter((n) => n.at).sort((a, b) => b.at!.localeCompare(a.at!))[0];
   const active = newest && x.now - new Date(newest.at!).getTime() < ACTIVE_FOR_MS ? newest.id : null;
   const [narration, narrationTone] = narrate(active ?? newest?.id ?? null, x, nodes);
-  return { nodes: list, active, activeAt: newest?.at ?? null, narration, narrationTone, gate, hash: x.hash };
+  return { nodes: list, active, activeAt: newest?.at ?? null, narration, narrationTone, gate, photo, hash: x.hash };
 }
 
 function narrate(id: FlowNodeId | null, x: FlowInputs, nodes: Map<FlowNodeId, FlowNode>): [string | null, FlowView['narrationTone']] {
@@ -178,26 +186,28 @@ function narrate(id: FlowNodeId | null, x: FlowInputs, nodes: Map<FlowNodeId, Fl
       if (nodes.get('guard')!.tone === 'immune' && x.block) return [`Blocked at the guard: ${x.block.firstSeenStore ? `${STORE_NAME[x.block.firstSeenStore]} saw this trick first` : 'a learned rule'}`, 'immune'];
       return i ? [`${i.nickname ?? 'A shopper'} talked ${STORE_NAME[i.storeId]} into it: ${money(i.lossCents)} moved in one Atlas transaction`, 'loss'] : [null, null];
     }
-    case 'ledgerStream': return ['The change stream hands every ledger entry to the auditor', null];
-    case 'auditor': return i ? [`The auditor checked it against real data: ${VIOLATION_WORDS[i.violations[0]] ?? 'no valid basis'}`, 'loss'] : [null, null];
-    case 'incident': return i ? [`Stored as an incident, a summary only: "${i.summary}"`, 'loss'] : [null, null];
+    case 'ledgerStream': return ['Atlas streams every ledger entry straight to the auditor', null];
+    case 'auditor': return i ? [`The auditor checked the real records: ${VIOLATION_WORDS[i.violations[0]] ?? 'no valid basis'}`, 'loss'] : [null, null];
+    case 'incident': return i ? [`The con landed: ${money(i.lossCents)} lost at ${STORE_NAME[i.storeId]}. Atlas keeps a summary, never the chat`, 'loss'] : [null, null];
     case 'memory': return c ? [c.grouping === 'agent-memory' && c.incidents > 1 && c.matchScore != null
-      ? `Atlas Agent Memory matched it to a known con (${c.matchScore.toFixed(2)}), first seen at ${STORE_NAME[c.firstSeenStore]}`
-      : `Atlas Agent Memory filed it as a con first seen at ${STORE_NAME[c.firstSeenStore]}`, 'learning'] : [null, null];
-    case 'learner': return l?.rules[0] ? [`Opus wrote a rule in plain words: "${l.rules[0]}"`, 'learning'] : ['Opus is writing a rule from the cons it remembered', 'learning'];
+      ? `Atlas remembers it: the same trick, first seen at ${STORE_NAME[c.firstSeenStore]}`
+      : `Atlas remembers it as a new con, first seen at ${STORE_NAME[c.firstSeenStore]}`, 'learning'] : [null, null];
+    case 'learner': return l?.rules[0] ? [`Claude wrote a rule in plain words: “${l.rules[0]}”`, 'learning'] : ['Claude is writing a rule from the cons Atlas remembered', 'learning'];
     case 'gate': {
       const g = l?.test;
       if (!g) return [null, null];
       if (l!.phase === 'rejected') return [l!.verdict ?? 'The gate said no: it would have hurt honest customers', 'loss'];
-      if (g.done >= g.total) return [`Proven on ${g.total} unseen cases with the same model: ${g.scamsStopped} of ${l!.scamsTotal} scams stopped, ${g.honestServed} of ${l!.honestTotal} honest served`, 'immune'];
-      return [`Testing on ${g.total} cases it has never seen, same model ${x.hash.slice(0, 8)}: ${g.done} done`, 'learning'];
+      if (g.done >= g.total) return [`Proven on ${g.total} cases it never saw, with the same model`, 'immune'];
+      return [`Testing the rule on ${g.total} cases it has never seen, with the same model`, 'learning'];
     }
     case 'guardrail': return x.promoted ? [x.promoted.status === 'awaiting_approval'
       ? `Policy v${x.promoted.version} is proven and waits for a person to approve it`
       : `Policy v${x.promoted.version} promoted in one Atlas transaction`, 'immune'] : [null, null];
     case 'stateStream': return x.promoted ? [`The change stream tells every store about v${x.promoted.version}`, 'immune'] : [null, null];
-    case 'runtimes': return x.rollout ? [`Every store is immune: ${storeMsLong(x.rollout.stores)}`, 'immune'] : [null, null];
+    case 'runtimes': return x.rollout ? [x.rollout.stores.every((s) => s.ms != null)
+      ? `Policy v${x.rollout.version} · every store immune in ${secs(Math.max(...x.rollout.stores.map((s) => s.ms ?? 0)))}`
+      : `Policy v${x.rollout.version} is reaching every store`, 'immune'] : [null, null];
     case 'block': return x.block ? [`Blocked at ${STORE_NAME[x.block.storeId]}${x.block.firstSeenStore ? `: ${STORE_NAME[x.block.firstSeenStore]} saw this trick first` : ''}`, 'immune'] : [null, null];
-    case 'rollback': return x.rollback ? [`Rolled back to v${x.rollback.to}: every store forgot it (${storeMsLong(x.rollback.stores)})`, 'learning'] : [null, null];
+    case 'rollback': return x.rollback ? [`One click rolled back to v${x.rollback.to}: every store forgot the rule`, 'learning'] : [null, null];
   }
 }
