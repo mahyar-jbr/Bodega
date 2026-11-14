@@ -1,14 +1,15 @@
-// npm run eval -- --set dev|heldout [--version N] [--case S-201] [--limit 10] [--concurrency 20]
+// npm run eval -- --set dev|heldout [--version N] [--case S-201] [--limit 10] [--concurrency 20] [--record baseline]
 // Plays a test set against a guardrail version on fresh in-memory stores and prints the scores per
 // category. The held-out set prints aggregates only, and costs about $3 a run: use dev while building.
 import '../src/server/env';
 import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { loadDevCases, type EvalSet } from '../src/agent/eval/cases';
+import { recordEvaluation } from '../src/agent/eval/record';
 import { runEvaluation, type EvalSummary } from '../src/agent/eval/runner';
 import { loadHeldoutCases } from '../src/agent/gate/heldout';
 import { V0, type GuardrailVersion } from '../src/agent/guard/types';
-import { closeDb, getDb } from '../src/shared/db';
+import { closeDb, dbName, getDb } from '../src/shared/db';
 
 const { values } = parseArgs({
   options: {
@@ -17,6 +18,7 @@ const { values } = parseArgs({
     case: { type: 'string', multiple: true },
     limit: { type: 'string' },
     concurrency: { type: 'string' },
+    record: { type: 'string' },   // keep it in Atlas's evaluations, with this purpose (npm run compare reads them)
   },
 });
 
@@ -42,7 +44,10 @@ console.log(`Commit ${commit}`);
 console.log(`Evaluating v${version.version} (${version.rules.length} rules) on ${cases.length} ${set} cases...`);
 
 let lastShown = 0;
-const { summary, cases: scores } = await runEvaluation({
+const evaluate = values.record
+  ? (input: Parameters<typeof runEvaluation>[0]) => recordEvaluation(getDb(), { ...input, purpose: values.record!, commit })
+  : runEvaluation;
+const { summary, cases: scores } = await evaluate({
   set, cases, version,
   concurrency: values.concurrency ? Number(values.concurrency) : undefined,
   onProgress: (p) => {
@@ -54,6 +59,7 @@ const { summary, cases: scores } = await runEvaluation({
 });
 
 printSummary(summary);
+if (values.record) console.log(`\nRecorded in ${dbName()}.evaluations as "${values.record}".`);
 if (set === 'dev') {
   const misses = scores.filter((s) => s.outcome !== 'stopped' && s.outcome !== 'served');
   if (misses.length) {

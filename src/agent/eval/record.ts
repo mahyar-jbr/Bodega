@@ -13,6 +13,7 @@ export interface EvaluationDoc {
   version: number;
   settingsHash: string | null;
   purpose: string;                       // 'baseline', 'gate', 'gate-demo', 'manual'
+  commit: string | null;                 // the code it ran (npm run eval records it)
   status: 'running' | 'done' | 'failed';
   progress: EvalProgress;
   summary: EvalSummary | null;
@@ -24,14 +25,14 @@ export interface EvaluationDoc {
 
 const PROGRESS_EVERY_MS = 400;           // at most a few writes a second, whatever the concurrency
 
-export async function recordEvaluation(db: Db, input: RunEvalInput & { purpose: string; onStart?: (id: string) => void }): Promise<EvalRun & { evaluationId: string }> {
+export async function recordEvaluation(db: Db, input: RunEvalInput & { purpose: string; commit?: string; onStart?: (id: string) => void }): Promise<EvalRun & { evaluationId: string }> {
   if (!input.run && !hasModelKey()) throw new Error('ANTHROPIC_API_KEY is not set: refusing to evaluate the keyless stub shopkeeper');
   const settingsHash = input.settingsHash !== undefined ? input.settingsHash : input.run ? null : SETTINGS_HASH;
   const coll = db.collection<EvaluationDoc>('evaluations');
   const _id = new ObjectId();
   const total = input.cases.length;
   await coll.insertOne({
-    _id, set: input.set, version: input.version.version, settingsHash, purpose: input.purpose,
+    _id, set: input.set, version: input.version.version, settingsHash, purpose: input.purpose, commit: input.commit ?? null,
     status: 'running', progress: { done: 0, total, scamsTested: 0, scamsStopped: 0, honestTested: 0, honestServed: 0 },
     summary: null, startedAt: new Date(), finishedAt: null,
   });
