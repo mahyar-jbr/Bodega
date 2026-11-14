@@ -504,6 +504,8 @@
 .so-btn[data-armed] { border-color: var(--learning); color: var(--learning); background: var(--learning-soft); }
 .so-btn:focus-visible, .so-corner:focus-visible, .so-input:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .so-unlock { display: flex; gap: var(--space-2); }
+.so-forget { border: 0; background: none; color: var(--ink-3); font: 450 12px/1.2 var(--font-sans); padding: 0 var(--space-2); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+.so-forget:hover { color: var(--ink); }
 .so-input {
   width: 180px; border: 1px solid var(--control-edge); background: transparent; color: var(--ink); border-radius: var(--radius-pill);
   padding: 6px 14px; font: 500 14px/1.2 var(--font-sans);

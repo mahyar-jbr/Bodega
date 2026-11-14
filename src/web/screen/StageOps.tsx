@@ -1,14 +1,17 @@
 // The presenter's controls on /stage: a tiny corner button (or the key `o`) opens a strip with the four
 // demo actions. It calls the same POST /api/ops/* routes as the ops console with the x-ops-password header.
-// The password is asked for once and kept in sessionStorage only: never localStorage, the URL or a log.
+// The server still checks the password on every call (the public URL must not reset or roll back).
+// On the demo laptop it's asked for once: after the first successful action it's remembered in
+// localStorage (bodega:ops-key), cleared on a 401 or by "Forget this laptop". Never in the URL or a log.
 // Clicks never move the keyboard focus (a shop window keeps its typing), and typing in the password field
 // never reaches the scene keys.
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ApiError, apiJson } from '../ui/api';
 
-const KEY = 'bodega-ops-password';
-const readPassword = () => { try { return sessionStorage.getItem(KEY) ?? ''; } catch { return ''; } };
-const savePassword = (p: string) => { try { if (p) sessionStorage.setItem(KEY, p); else sessionStorage.removeItem(KEY); } catch { /* private mode */ } };
+const KEY = 'bodega:ops-key';
+const readPassword = () => { try { return localStorage.getItem(KEY) ?? ''; } catch { return ''; } };
+/** Remembers the password on this laptop (an empty value forgets it). */
+const savePassword = (p: string) => { try { if (p) localStorage.setItem(KEY, p); else localStorage.removeItem(KEY); } catch { /* private mode */ } };
 
 type Action = { key: string; label: string; path: string; body?: Record<string, unknown>; confirm?: string; done: (r: Record<string, unknown>) => string };
 const ACTIONS: Action[] = [
@@ -65,6 +68,7 @@ export function StageOps() {
       const r = await apiJson<Record<string, unknown>>(a.path, {
         method: 'POST', headers: { 'x-ops-password': password }, body: JSON.stringify(a.body ?? {}),
       });
+      savePassword(password);          // it worked: this laptop won't ask again
       say(a.done(r ?? {}));
     } catch (e) {
       if (e instanceof ApiError && (e.status === 401 || e.status === 403)) { savePassword(''); setPassword(''); say('Password rejected', true); }
@@ -75,9 +79,11 @@ export function StageOps() {
   const unlock = (e: FormEvent) => {
     e.preventDefault();
     if (!draft) return;
-    savePassword(draft); setPassword(draft); setDraft('');
+    setPassword(draft); setDraft('');   // remembered only after the first action succeeds
     (document.activeElement as HTMLElement | null)?.blur();
   };
+
+  const forget = () => { savePassword(''); setPassword(''); setArmed(null); say('Forgotten on this laptop'); };
 
   // Mouse down without a focus change: a shop window keeps its keyboard.
   const keepFocus = (e: React.MouseEvent) => e.preventDefault();
@@ -95,7 +101,7 @@ export function StageOps() {
               disabled={!!busy} data-armed={armed === a.key ? 'true' : undefined} data-busy={busy === a.key ? 'true' : undefined}>
               {armed === a.key ? a.confirm : busy === a.key ? `${a.label}…` : a.label}
             </button>
-          )) : (
+          )).concat(<button key="forget" type="button" className="so-forget" onMouseDown={keepFocus} onClick={forget}>Forget this laptop</button>) : (
             <form className="so-unlock" onSubmit={unlock}>
               <input type="password" className="so-input" placeholder="Ops password" aria-label="Ops password" autoComplete="off"
                 value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus />
