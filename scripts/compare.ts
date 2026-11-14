@@ -18,15 +18,17 @@ if (positionals.length !== 2 || [a, b].some((n) => !Number.isInteger(n) || n < 0
   process.exit(1);
 }
 
-type Stored = EvaluationDoc & { summary: EvalSummary; archivedAt?: Date; epoch?: number };
+type Stored = EvaluationDoc & { summary: EvalSummary; archivedAt?: Date; archiveEpoch?: number; epoch?: number };
 const evaluations = getDb().collection<Stored>('evaluations');
 const archive = getDb().collection<Stored>('evaluations_archive');
 async function latest(version: number): Promise<Stored & { from: string }> {
   const filter = { set: values.set as EvaluationDoc['set'], version, status: 'done' as const };
   if (values.archive && version !== 0) {
-    const epochFilter = values.epoch ? { epoch: Number(values.epoch) } : {};
+    // fresh-show records the show as archiveEpoch (older archives: epoch).
+    const epochFilter = values.epoch ? { $or: [{ archiveEpoch: Number(values.epoch) }, { epoch: Number(values.epoch) }] } : {};
     const doc = await archive.findOne({ ...filter, ...epochFilter }, { sort: { archivedAt: -1, finishedAt: -1 } });
-    if (doc?.summary) return { ...doc, from: `archive${doc.epoch != null ? `, epoch ${doc.epoch}` : ''}` };
+    const show = doc?.archiveEpoch ?? doc?.epoch;
+    if (doc?.summary) return { ...doc, from: `archive${show != null ? `, epoch ${show}` : ''}` };
   }
   const doc = await evaluations.findOne(filter, { sort: { finishedAt: -1 } });
   if (!doc?.summary) throw new Error(`no finished ${values.set} evaluation of v${version} in ${dbName()}.evaluations${values.archive ? ' or its archive' : ''}`);
