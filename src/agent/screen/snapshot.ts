@@ -405,15 +405,19 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
   }
 
   // ── Memory governance: the latest probe, the TTL index, forgotten shoppers ──
-  const [proofDoc, convIndexes] = await Promise.all([
+  // forget_log: one entry per shopper forgotten on request, counts only (no ids, no names).
+  type ForgetEntry = { at: Date; conversationsDeleted: number; incidentsRedacted: number };
+  const [proofDoc, convIndexes, forgotten, recentForgets] = await Promise.all([
     db.collection<MemoryProof>(MEMORY_PROOFS).find({}).sort({ at: -1 }).limit(1).next(),
     db.collection('conversations').indexes().catch(() => [] as { name?: string; expireAfterSeconds?: number }[]),
+    db.collection<ForgetEntry>('forget_log').countDocuments({ at: { $gte: epochStart } }),
+    db.collection<ForgetEntry>('forget_log').find({ at: { $gte: epochStart } }).sort({ at: -1 }).limit(2).toArray(),
   ]);
   const memory: MemoryGovernance = {
     proof: proofDoc ? { at: proofDoc.at.toISOString(), refused: proofDoc.refused, code: proofDoc.code, message: proofDoc.message,
       collection: proofDoc.collection, field: proofDoc.field } : null,
     ttlSeconds: (convIndexes as { name?: string; expireAfterSeconds?: number }[]).find((i) => i.name === TTL_INDEX)?.expireAfterSeconds ?? null,
-    forgotten: 0,
+    forgotten,
   };
 
   // ── Feed: the newest events, two lines each ──
@@ -457,6 +461,10 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
       who: `Tried to store raw chat text in ${memory.proof.collection}`,
       text: short(memory.proof.refused ? `Atlas refused it (code ${memory.proof.code})` : 'Atlas accepted it: check the validator'),
       amountCents: null, at: memory.proof.at }] : []),
+    ...recentForgets.map((f) => ({
+      id: `fg:${f.at.toISOString()}`, kind: 'con-blocked' as const, who: 'A shopper asked to be forgotten',
+      text: short(`${f.conversationsDeleted} ${f.conversationsDeleted === 1 ? 'chat' : 'chats'} deleted, ${f.incidentsRedacted} anonymised`),
+      amountCents: null, at: f.at.toISOString() })),
     ...(flash ? [{
       id: `f:${flash.at}`, kind: (flash.passed ? 'sale' : 'rule-rejected') as FeedKind, who: `Flash sale at ${STORE_NAME[flash.store]}`,
       text: short(flash.passed ? `${flash.attempted} shoppers, exactly ${flash.sold} sold` : 'A check failed: see the scene'),
