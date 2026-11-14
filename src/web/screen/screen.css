@@ -119,6 +119,18 @@
 
 /* Lower row: the scene's main panel and the live feed */
 .bs-lower { display: grid; grid-template-columns: 1fr 620px; gap: var(--space-6); min-height: 0; }
+.bs-stage[data-narrow] .bs-lower { grid-template-columns: 1fr 580px; }
+.bs-stage[data-narrow] .bs-tile-numbers .stage-display { font-size: 88px; }
+.bs-stage[data-narrow] .bs-learn-cols { grid-template-columns: 0.7fr 1.15fr 1.05fr; }
+.bs-stage[data-narrow] .bs-detail, .bs-stage[data-narrow] .bs-wide-only { display: none; }
+.bs-stage[data-narrow] .bs-results .bs-panel { padding: 24px 28px; }
+.bs-stage[data-narrow] .bs-learn-foot .stage-body { font-size: 26px; line-height: 1.3; }
+.bs-stage[data-narrow] .bs-rule { font-size: 26px; line-height: 1.3; }
+.bs-test-row > span:first-child { white-space: nowrap; }
+.bs-stage[data-narrow] .bs-learn-cols { gap: var(--space-8); }
+.bs-stage[data-narrow] .bs-audit-cols { gap: var(--space-8); grid-template-columns: 1fr 1fr; }
+.bs-stage[data-narrow] .bs-audit-row { grid-template-columns: 76px 1fr auto; gap: 12px; }
+.bs-stage[data-narrow] .bs-rollout .bs-timeline { width: 400px; }
 .bs-panel { padding: var(--space-8); min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .bs-panel-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--space-3); }
 .bs-scene { animation: bs-blur-in var(--dur-scene) var(--ease-out); }
@@ -199,7 +211,7 @@
 .bs-learn-col { overflow: hidden; }
 .bs-learn-foot[data-verdict="promoted"] { color: var(--immune); }
 .bs-learn-foot[data-verdict="rejected"] { color: var(--loss); }
-.bs-test-row { display: flex; justify-content: space-between; margin-bottom: 10px; }
+.bs-test-row { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .bs-test-row b { font-weight: 560; }
 .bs-dots { display: grid; grid-template-columns: repeat(15, 1fr); gap: 7px 6px; }
 .bs-tdot { width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid var(--line-strong); }
@@ -237,7 +249,7 @@
 .bs-pin { position: absolute; left: 40px; bottom: 4px; color: var(--ink-3); font-size: 26px; pointer-events: none; }
 .bs-pin-right { left: auto; right: 40px; }
 .bs-legend { display: flex; gap: 28px; color: var(--ink-2); }
-.bs-legend > span { display: inline-flex; align-items: center; gap: 10px; }
+.bs-legend > span { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; }
 .bs-key { display: inline-block; width: 28px; height: 3px; border-radius: 2px; }
 .bs-key-dot { background: radial-gradient(circle, var(--served) 1.5px, transparent 2px) 0 0 / 9px 3px repeat-x; }
 .bs-chart { overflow: visible; }

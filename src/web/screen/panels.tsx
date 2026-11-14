@@ -65,14 +65,14 @@ export function LearningPanel({ data }: { data: LearningData }) {
         <div className="bs-learn-col" data-step={steps[0]}>
           <div className="stage-label bs-col-label">What happened</div>
           <div className="stage-body">{data.incident.summary}</div>
-          <div className="stage-label bs-quiet" style={{ marginTop: 8 }}>{data.incident.detail}</div>
+          <div className="stage-label bs-quiet bs-detail" style={{ marginTop: 8 }}>{data.incident.detail}</div>
           <div className="stage-number bd-num" style={{ color: 'var(--loss)', marginTop: 20 }}>{'−'}{money(data.incident.lostCents)}</div>
         </div>
         <div className="bs-learn-col" data-step={steps[1]}>
           <div className="stage-label bs-col-label">New guardrail, in plain words</div>
-          {data.phase === 'incident' ? <div className="stage-body bs-quiet">Waiting for the con memory</div>
+          {data.guardrail.rules.length === 0 ? <div className="stage-body bs-quiet">{data.phase === 'incident' ? 'Remembering the con\u2026' : 'Opus is writing the next guardrail\u2026'}</div>
             : data.guardrail.rules.slice(0, 2).map((r) => <div key={r} className="stage-body bs-rule">{r}</div>)}
-          {data.phase !== 'incident' && (
+          {data.guardrail.rules.length > 0 && (
             <div className="stage-label bs-quiet" style={{ marginTop: 6 }}>
               Policy v{data.guardrail.version}{data.guardrail.rules.length > 2 ? `, and ${data.guardrail.rules.length - 2} more` : ''}, every store
             </div>
@@ -144,17 +144,17 @@ export function ResultsRow({ data }: { data: ResultsData }) {
       <section className="bs-glass bs-panel bs-scene">
         <div className="stage-label bs-quiet">Scams that work</div>
         <div className="stage-display bd-num" style={{ color: 'var(--immune)' }}>{fmtPct(data.after.scamsPct)}</div>
-        <div className="stage-label bs-quiet">From <b className="bs-ink">{fmtPct(data.before.scamsPct)}</b> before learning</div>
+        <div className="stage-label bs-quiet">From <b className="bs-ink">{fmtPct(data.before.scamsPct)}</b> before<span className="bs-wide-only"> learning</span></div>
       </section>
       <section className="bs-glass bs-panel bs-scene">
         <div className="stage-label bs-quiet">Honest turned away</div>
         <div><span className="stage-display bd-num">{data.after.honestAway}</span> <span className="stage-heading bs-quiet">of {data.honestTotal}</span></div>
-        <div className="stage-label bs-quiet">Was {data.before.honestAway} at v{data.before.version}; real codes still work</div>
+        <div className="stage-label bs-quiet">Was {data.before.honestAway} at v{data.before.version}<span className="bs-wide-only">; real codes still work</span></div>
       </section>
       <section className="bs-glass bs-panel bs-scene">
         <div className="stage-label bs-quiet">Time to immunity</div>
         <div className="stage-display bd-num">{data.immunityMs == null ? '–' : seconds(data.immunityMs)}</div>
-        <div className="stage-label bs-quiet">Verdict to every store</div>
+        <div className="stage-label bs-quiet">To every store</div>
       </section>
     </div>
   );
@@ -216,7 +216,7 @@ export function VersionChart({ versions }: { versions: VersionPoint[] }) {
   return (
     <section className="bs-glass bs-panel bs-scene" aria-label="Every guardrail version">
       <div className="bs-panel-head">
-        <h2 className="stage-heading">Every guardrail version</h2>
+        <h2 className="stage-heading">Every <span className="bs-wide-only">guardrail </span>version</h2>
         <span className="stage-label bs-legend">
           <span><i className="bs-key" style={{ background: 'var(--loss)' }} /> Scams that work</span>
           <span><i className="bs-key bs-key-dot" /> Honest turned away</span>
@@ -279,12 +279,12 @@ export function AuditPanel({ audit, index, count }: { audit: AuditData; index: n
       <div className="bs-audit-cols">
         <div>
           <div className="stage-label bs-col-label">What moved, from the ledger</div>
-          {audit.entries.map((e) => (
+          {audit.entries.slice(0, 3).map((e) => (
             <div key={`${e.at}${e.orderNumber}`} className="bs-audit-row">
               <span className="stage-label bs-quiet bd-num">{clock(new Date(e.at))}</span>
               <span className="stage-body">
                 <span className="mono-stage">{e.orderNumber ?? (e.kind === 'refund' ? 'refund' : 'sale')}</span>{' '}
-                <span className="bs-quiet-2">{storeName(e.store)}, v{e.guardVersion ?? 0}</span>
+                <span className="bs-quiet-2">{storeName(e.store)}<span className="bs-wide-only">, v{e.guardVersion ?? 0}</span></span>
                 <div className="stage-label" style={{ color: 'var(--loss)' }}>{e.violations.map((v) => VIOLATION_WORDS[v] ?? v).join(', ')}</div>
               </span>
               <span className="stage-body bd-num" style={{ color: 'var(--loss)' }}>{'−'}{money(e.lossCents)}</span>

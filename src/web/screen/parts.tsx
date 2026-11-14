@@ -24,17 +24,23 @@ export function AwningMark({ store, width }: { store: StoreKey | 'brand'; width:
   );
 }
 
-// Holds the 1920 by 1080 design and scales it to fit its container (the window, on /screen).
+// Holds the 1080-high design and scales it to fit its container (the window, on /screen). The design
+// is 1920 wide; a narrower container (the stage view, beside the phone) gets a narrower layout at full
+// scale-down where it can, down to 1640 wide (the stage view: about 0.89, so 26px reads as 23px).
+const DESIGN_H = 1080, MAX_W = 1920, MIN_W = 1640;
+
 export function StageFrame({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState({ scale: 1, x: 0, y: 0 });
+  const [box, setBox] = useState({ scale: 1, x: 0, y: 0, w: MAX_W });
   useLayoutEffect(() => {
     const parent = ref.current?.parentElement;
     if (!parent) return;
     const fit = () => {
-      const w = parent.clientWidth, h = parent.clientHeight;
-      const scale = Math.min(w / 1920, h / 1080);
-      setBox({ scale, x: (w - 1920 * scale) / 2, y: (h - 1080 * scale) / 2 });
+      const pw = parent.clientWidth, ph = parent.clientHeight;
+      const aspect = pw / ph;
+      const w = Math.max(MIN_W, Math.min(MAX_W, Math.round(DESIGN_H * aspect)));
+      const scale = Math.min(pw / w, ph / DESIGN_H);
+      setBox({ scale, x: (pw - w * scale) / 2, y: (ph - DESIGN_H * scale) / 2, w });
     };
     fit();
     const observer = new ResizeObserver(fit);
@@ -42,7 +48,8 @@ export function StageFrame({ children }: { children: ReactNode }) {
     return () => observer.disconnect();
   }, []);
   return (
-    <div ref={ref} className="bs-stage" style={{ transform: `translate(${box.x}px, ${box.y}px) scale(${box.scale})` }}>
+    <div ref={ref} className="bs-stage" data-narrow={box.w < 1800 ? 'true' : undefined}
+      style={{ width: box.w, transform: `translate(${box.x}px, ${box.y}px) scale(${box.scale})` }}>
       {children}
     </div>
   );
@@ -151,6 +158,7 @@ export function LiveFeed({ items, max = 5 }: { items: FeedItemData[]; max?: numb
       <div className="bs-panel-head">
         <div className="bs-feed-title stage-heading">Live <span className="bs-live" /></div>
       </div>
+      {items.length === 0 && <p className="bs-empty stage-body">Waiting for the first shopper.</p>}
       {items.slice(0, max).map((it) => (
         <div key={it.id} className="bs-feed-row" data-kind={it.kind}>
           <span className="bs-dot" />
@@ -187,10 +195,13 @@ export function ConWall({ cons, max = 6 }: { cons: ConRow[]; max?: number }) {
     <section className="bs-glass bs-panel bs-scene" aria-label="Tricks tried">
       <div className="bs-panel-head">
         <h2 className="stage-heading">Tricks tried so far</h2>
-        <span className="stage-label" style={{ color: 'var(--ink-3)' }}>{cons.length} so far</span>
+        {cons.length > 0 && <span className="stage-label" style={{ color: 'var(--ink-3)' }}>{cons.length} so far</span>}
       </div>
       {cons.length === 0 ? (
-        <p className="bs-empty stage-body">No tricks yet. Every store is trusting on purpose.</p>
+        <div className="bs-empty">
+          <p className="stage-body">No tricks yet. Every store is trusting on purpose.</p>
+          <p className="stage-label" style={{ marginTop: 12 }}>When a con works, it lands here as a summary, never the customer's words.</p>
+        </div>
       ) : (
         <table className="bs-table stage-body">
           <thead className="stage-label">

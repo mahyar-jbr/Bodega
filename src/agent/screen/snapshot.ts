@@ -90,7 +90,7 @@ export interface SnapshotDeps {
 }
 
 const iso = (d: Date | null | undefined) => (d ? new Date(d).toISOString() : null);
-const short = (s: string, n = 30) => (s.length <= n ? s : `${s.slice(0, n - 1).trimEnd()}…`);
+const short = (s: string, n = 36) => (s.length <= n ? s : `${s.slice(0, n - 1).trimEnd()}…`);
 
 // state() is polled by the screen and by every shop window: build the snapshot at most this often.
 const SNAPSHOT_TTL_MS = 750;
@@ -148,7 +148,7 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
     : !run && newest ? recentEvals.find((e) => e.version === newest._id) : undefined;
   if (run || state?.learning || newest) {
     const phase: NonNullable<ScreenSnapshot['learning']>['phase'] = run
-      ? run.phase === 'learning' ? (attempt ? 'drafting' : 'incident')
+      ? run.phase === 'learning' ? 'drafting'
         : run.phase === 'gating' ? 'testing'
         : run.phase === 'promoted' ? 'promoted'
         : 'rejected'
@@ -292,10 +292,16 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
         text: short(`Blocked at ${STORE_NAME[b.meta.storeId]}${conTitle ? `, ${conTitle}` : ''}`), amountCents: null, at: b.ts.toISOString() };
     }),
     ...orders.filter((o) => !conned.has(o.number)).map((o) => {
-      const line = (o.lines as { sku: string; qty: number }[] | undefined)?.[0];
-      const what = line ? `${line.qty > 1 ? `${line.qty} \u00d7 ` : ''}${productNames.get(line.sku) ?? line.sku}` : 'An order';
+      const lines = (o.lines as { sku: string; qty: number }[] | undefined) ?? [];
+      const at = ` at ${STORE_NAME[o.storeId as StoreId]}`;
+      const name = (l: { sku: string; qty: number }) => `${l.qty > 1 ? `${l.qty} \u00d7 ` : ''}${productNames.get(l.sku) ?? l.sku}`;
+      const both = lines.length === 2 ? `${name(lines[0])}, ${name(lines[1])}${at}` : '';
+      const what = lines.length === 0 ? `An order${at}`
+        : lines.length === 1 ? `${name(lines[0])}${at}`
+        : both && both.length <= 28 ? both
+        : `${name(lines[0])} +${lines.length - 1}${at}`;
       return { id: `o:${o._id}`, kind: 'sale' as const, who: nicknames.get(String(o.shopperId)) ?? 'A shopper',
-        text: short(`${what} at ${STORE_NAME[o.storeId as StoreId]}`), amountCents: o.totalCents as number, at: new Date(o.createdAt).toISOString() };
+        text: short(what), amountCents: o.totalCents as number, at: new Date(o.createdAt).toISOString() };
     }),
     ...guardrails.filter((g) => g.status !== 'candidate' && (g.promotedAt ?? g.createdAt) >= (sinceReset ?? new Date(0))).map((g) => ({
       id: `g:${g._id}:${g.status}`, kind: (g.status === 'rejected' ? 'rule-rejected' : 'rule-promoted') as FeedKind,
