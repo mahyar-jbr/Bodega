@@ -1,0 +1,49 @@
+import '../server/env';
+import { afterAll, beforeAll } from 'vitest';
+import { closeDb, dbName, getClient } from '../shared/db';
+import type { StoreId } from '../shared/contract';
+import { storeContractTests } from '../shared/store-contract';
+import { AtlasStore } from './atlas-store';
+import { catalogDocuments, seedDatabase, STORE_SEEDS } from './seed';
+
+const db = getClient().db(`${dbName()}_contract`);
+
+beforeAll(async () => {
+  await seedDatabase(db);
+});
+
+afterAll(async () => {
+  await Promise.all([
+    db.collection('shoppers').deleteMany({}),
+    db.collection('orders').deleteMany({}),
+    db.collection('ledger').deleteMany({}),
+    db.collection('counters').deleteMany({}),
+  ]);
+  await closeDb();
+});
+
+async function makeFreshAtlasStore(): Promise<AtlasStore> {
+  await Promise.all([
+    db.collection('shoppers').deleteMany({}),
+    db.collection('orders').deleteMany({}),
+    db.collection('ledger').deleteMany({}),
+    db.collection('counters').deleteMany({}),
+    db.collection('products').bulkWrite(
+      catalogDocuments().map((product) => ({
+        updateOne: {
+          filter: { storeId: product.storeId, sku: product.sku },
+          update: { $set: { stock: product.stock } },
+        },
+      })),
+    ),
+  ]);
+  await db.collection<{ _id: StoreId; seq: number }>('counters').insertMany(
+    STORE_SEEDS.map(({ storeId }) => ({ _id: storeId, seq: 1000 })),
+  );
+  return new AtlasStore(db);
+}
+
+storeContractTests('AtlasStore', makeFreshAtlasStore, {
+  ledgerFor: async (store, shopperId) => (store as AtlasStore).ledger(shopperId),
+  timeoutMs: 60_000,
+});
