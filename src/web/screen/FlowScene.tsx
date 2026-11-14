@@ -45,6 +45,12 @@ const STORE_LETTER: Record<StoreId, string> = { queen: 'Queen St', yonge: 'Yonge
 const PHOTO_HOLD_MS = 8_000;
 const HOP_MS = 800;
 
+/** The step the scene shows: every store immune holds for 8 s (the photo moment), else the newest. */
+export function flowFocus(flow: FlowData | null): FlowNodeId | null {
+  if (!flow) return null;
+  return flow.photo && Date.now() - new Date(flow.photo.at).getTime() < PHOTO_HOLD_MS + 1_000 ? 'runtimes' : flow.active;
+}
+
 /** Which header beat a step belongs to. */
 export function flowBeat(active: FlowNodeId | null): Scene | null {
   if (!active) return null;

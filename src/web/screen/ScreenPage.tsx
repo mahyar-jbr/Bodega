@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useScreenData } from './live';
 import { isTyping } from './StageOps';
-import { FlowScene, flowBeat } from './FlowScene';
+import { FlowScene, flowBeat, flowFocus } from './FlowScene';
 import { AuditPanel, FlashPanel, LearningPanel, MemoryPanel, ResultsRow, RolloutPanel, VersionChart } from './panels';
 import { ConWall, LiveFeed, StageFrame, StageHeader, StoreTile } from './parts';
 import { SCENES, type Scene, type ScreenData } from './types';
@@ -57,7 +57,7 @@ export function BigScreen() {
   return (
     <div className="bs-screen" data-connection={connection}>
       <StageFrame scene={scene}>
-        <StageHeader scene={scene} flowBeat={scene === 'flow' ? flowBeat(data.flow?.active ?? null) : null} />
+        <StageHeader scene={scene} flowBeat={scene === 'flow' ? flowBeat(flowFocus(data.flow)) : null} />
         {scene === 'flow' && data.flow ? <FlowScene flow={data.flow} /> : (
           <>
             <div className="bs-tiles">

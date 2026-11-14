@@ -158,12 +158,26 @@ export function buildFlow(x: FlowInputs): FlowView {
       : (FLOW_NODES as readonly string[]).includes(e.node) ? e.node as FlowNodeId
       : e.node === 'transaction' ? 'transaction' : null;
     if (!node) continue;
+    // The change streams show the delivery time Eng 1 measured: for the ledger entry behind the incident,
+    // and for a promotion reaching the stores. Other changes (a reset, a rollback) don't light these steps.
+    if (node === 'ledgerStream') {
+      const lag = x.incident ? x.incident.createdAt.getTime() - e.at.getTime() : -1;
+      if (e.ms == null || lag < 0 || lag > 60_000) continue;
+      nodes.set(node, { ...nodes.get(node)!, value: ms(e.ms), detail: 'a ledger insert, to the auditor' });
+      continue;
+    }
+    if (node === 'stateStream') {
+      const p = x.promoted;
+      if (e.ms == null || !p || p.status === 'awaiting_approval' || !/promot|approv/.test(e.value) || (e.version != null && e.version !== p.version)) continue;
+      const c = nodes.get(node)!;
+      nodes.set(node, { ...c, value: ms(e.ms), detail: `v${p.version} to every store`, at: c.at ?? e.at.toISOString(), tone: 'immune' });
+      continue;
+    }
     const cur = nodes.get(node)!;
     if (cur.at && new Date(cur.at) > e.at) continue;
     if (node === 'shopper') set(node, e.at, e.value.split(' · ')[0], e.value.includes(' · ') ? `by ${e.value.split(' · ')[1]}` : cur.detail, cur.tone);
     else if (node === 'guard') set(node, e.at, e.value.split(':')[0], e.value.includes(':') ? e.value.split(':').slice(1).join(':').trim() : null,
       /block/.test(e.value) ? 'immune' : /cap/.test(e.value) ? 'learning' : cur.tone ?? 'served');
-    else if (node === 'ledgerStream' || node === 'stateStream') set(node, e.at, e.ms != null ? ms(e.ms) : cur.value ?? 'sent', e.value, cur.tone);
     else if (node === 'memory' && e.score != null) set(node, e.at, `match ${e.score.toFixed(2)}`, cur.detail, 'learning');
   }
 
