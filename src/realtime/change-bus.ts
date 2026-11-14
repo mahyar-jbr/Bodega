@@ -10,6 +10,7 @@ import { SCREEN_COLLECTIONS, type ChangeBus, type ChangeEvent } from '../shared/
 const STATE_ID = 'database-change-stream';
 const DEFAULT_SAVE_INTERVAL_MS = 3_000;
 const MAX_BACKOFF_MS = 5_000;
+const INVALID_RESUME_TOKEN_CODES = new Set([260, 280, 286]);
 
 export const STREAM_COLLECTIONS = [...new Set([...SCREEN_COLLECTIONS, 'shoppers'])];
 
@@ -111,6 +112,12 @@ export class MongoChangeBus implements ChangeBus {
       } catch (error) {
         this.stream = undefined;
         if (!this.running) break;
+        if (isInvalidResumeTokenError(error)) {
+          this.lastToken = undefined;
+          this.savedToken = undefined;
+          loadedState = true;
+          await this.clearStoredToken();
+        }
         console.error(`Change stream reconnecting after ${describeError(error)}`);
         await delay(backoffMs);
         backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
@@ -156,6 +163,14 @@ export class MongoChangeBus implements ChangeBus {
       if (this.running) console.error(`Change stream token save failed: ${describeError(error)}`);
     }
   }
+
+  private async clearStoredToken(): Promise<void> {
+    try {
+      await this.db.collection<BusStateDoc>('bus_state').deleteOne({ _id: STATE_ID });
+    } catch (error) {
+      if (this.running) console.error(`Invalid change stream token cleanup failed: ${describeError(error)}`);
+    }
+  }
 }
 
 function documentId(doc: Document | null, key: unknown): string {
@@ -167,6 +182,11 @@ function describeError(error: unknown): string {
   if (!(error instanceof Error)) return 'unknown error';
   const codeName = (error as { codeName?: unknown }).codeName;
   return typeof codeName === 'string' ? `${error.name} (${codeName})` : error.name;
+}
+
+export function isInvalidResumeTokenError(error: unknown): boolean {
+  if (!error || typeof error !== 'object' || !('code' in error)) return false;
+  return INVALID_RESUME_TOKEN_CODES.has(Number(error.code));
 }
 
 function delay(ms: number): Promise<void> {

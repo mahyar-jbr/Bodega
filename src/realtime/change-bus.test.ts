@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ChangeEvent } from '../shared/contract';
-import { MongoChangeBus, STREAM_COLLECTIONS } from './change-bus';
+import { isInvalidResumeTokenError, MongoChangeBus, STREAM_COLLECTIONS } from './change-bus';
 
 describe('MongoChangeBus', () => {
   it('watches shoppers and every screen collection, but never conversations', () => {
@@ -23,5 +23,18 @@ describe('MongoChangeBus', () => {
     unsubscribe();
     Reflect.get(bus, 'dispatch').call(bus, change);
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('recognizes only invalid or lost resume-token errors', () => {
+    for (const code of [260, 280, 286]) expect(isInvalidResumeTokenError({ code })).toBe(true);
+    expect(isInvalidResumeTokenError({ code: 6 })).toBe(false);
+    expect(isInvalidResumeTokenError(new Error('network'))).toBe(false);
+  });
+
+  it('deletes only the saved bus checkpoint when a resume token is invalid', async () => {
+    const deleteOne = vi.fn(async () => ({ deletedCount: 1 }));
+    const bus = new MongoChangeBus({ collection: () => ({ deleteOne }) } as never);
+    await Reflect.get(bus, 'clearStoredToken').call(bus);
+    expect(deleteOne).toHaveBeenCalledWith({ _id: 'database-change-stream' });
   });
 });
