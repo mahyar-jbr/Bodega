@@ -16,7 +16,8 @@
     "seed": "tsx scripts/seed.ts",
     "eval": "tsx scripts/eval.ts",
     "compare": "tsx scripts/compare.ts",
-    "try": "tsx scripts/try.ts"
+    "try": "tsx scripts/try.ts",
+    "smoke": "tsx scripts/smoke.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",
