@@ -4,6 +4,7 @@ import './screen.css';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useScreenData } from './live';
+import { isTyping } from './StageOps';
 import { FlowScene, flowBeat } from './FlowScene';
 import { AuditPanel, FlashPanel, LearningPanel, MemoryPanel, ResultsRow, RolloutPanel, VersionChart } from './panels';
 import { ConWall, LiveFeed, StageFrame, StageHeader, StoreTile } from './parts';
@@ -16,7 +17,7 @@ function usePinnedScene(): { pinned: Scene | null; auditIndex: number; openAudit
   const [auditIndex, setAuditIndex] = useState(0);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
       if (e.key === '0') setPinned(null);
       const i = Number(e.key) - 1;
       if (i >= 0 && i < SCENES.length) {

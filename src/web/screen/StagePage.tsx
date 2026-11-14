@@ -1,16 +1,19 @@
 // /stage: what the presenting laptop shows full screen (plan/DEMO.md). The big screen fills the left,
-// and a phone-size shop window sits on the right with four tabs, each its own shopper. All four
+// and a phone-size shop window sits on the right with five tabs, each its own shopper. All four
+// The demo controls hide behind `o` (StageOps). All five
 // windows stay loaded, so switching is instant and every chat keeps its place.
 import '../../../design/tokens.css';
 import './screen.css';
 import { useEffect, useRef, useState } from 'react';
 import { BigScreen } from './ScreenPage';
+import { StageOps } from './StageOps';
 
 const TABS = [
   { key: 'q1', label: 'Queen', src: '/s/queen?as=q1' },
   { key: 'q2', label: 'Queen 2', src: '/s/queen?as=q2' },
   { key: 'y1', label: 'Yonge', src: '/s/yonge?as=y1' },
   { key: 'y2', label: 'Yonge 2', src: '/s/yonge?as=y2' },
+  { key: 's1', label: 'Scarborough', src: '/s/scarborough?as=s1' },
 ] as const;
 
 const PHONE_W = 390, PHONE_H = 844, TABS_H = 70, GUTTER = 24;
@@ -61,6 +64,7 @@ export default function StagePage() {
           ))}
         </div>
       </aside>
+      <StageOps />
     </div>
   );
 }

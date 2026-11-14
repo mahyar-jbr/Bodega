@@ -89,14 +89,14 @@ export function buildFlow(x: FlowInputs): FlowView {
     set('guard', new Date(moved.getTime() - 1), 'pass', i.storeId && x.activeVersion === 0 ? 'v0 has no rules yet' : null, 'loss');
     set('transaction', i.at, i.kind === 'refund' ? `refund ${money(i.lossCents)}` : `${i.orderNumber ?? 'order'}`, i.kind === 'refund' ? null : 'sale', 'loss');
     const lag = i.createdAt.getTime() - i.at.getTime();
-    set('ledgerStream', new Date(i.createdAt.getTime() - 1), 'ledger insert', `${ms(Math.max(0, lag))} to the auditor`);
-    set('auditor', i.createdAt, 'no valid basis', VIOLATION_WORDS[i.violations[0]] ?? i.violations[0] ?? null, 'loss');
+    set('ledgerStream', new Date(i.createdAt.getTime() - 1), ms(Math.max(0, lag)), 'a ledger insert, to the auditor');
+    set('auditor', i.createdAt, 'no basis', VIOLATION_WORDS[i.violations[0]] ?? i.violations[0] ?? null, 'loss');
     set('incident', i.createdAt, `${money(i.lossCents)} lost`, i.summary, 'loss');
   }
   if (x.con) {
     const c = x.con;
     const value = c.grouping === 'violation' ? 'grouped by violation'
-      : c.incidents > 1 && c.matchScore != null ? `matched ${c.matchScore.toFixed(2)}` : 'new con';
+      : c.incidents > 1 && c.matchScore != null ? `match ${c.matchScore.toFixed(2)}` : 'new con';
     set('memory', c.lastSeenAt, value, `first seen at ${STORE_NAME[c.firstSeenStore]}`, 'learning');
   }
 
@@ -104,13 +104,13 @@ export function buildFlow(x: FlowInputs): FlowView {
   let gate: FlowView['gate'] = null;
   if (x.learning) {
     const l = x.learning;
-    if (l.rules.length) set('learner', l.startedAt ?? l.testStartedAt, l.rules[0], `Opus 5.5 · ${l.ruleCount} ${l.ruleCount === 1 ? 'rule' : 'rules'}`, 'learning');
+    if (l.rules.length) set('learner', l.startedAt ?? l.testStartedAt, `${l.ruleCount} ${l.ruleCount === 1 ? 'rule' : 'rules'}`, l.rules[0], 'learning');
     else if (l.phase === 'drafting' || l.phase === 'incident') set('learner', l.startedAt, 'writing a rule…', 'Opus 5.5', 'learning');
     if (l.test && (l.test.done > 0 || l.phase === 'testing')) {
       gate = { ...l.test, scamsTotal: l.scamsTotal, honestTotal: l.honestTotal };
       const done = l.test.done >= l.test.total && l.phase !== 'testing';
       set('gate', done ? l.testFinishedAt ?? l.testStartedAt : l.testStartedAt,
-        done ? (l.phase === 'rejected' ? 'rejected' : `${l.test.scamsStopped} of ${l.scamsTotal} stopped`) : `${l.test.done} of ${l.test.total}`,
+        done ? (l.phase === 'rejected' ? 'rejected' : `${l.test.scamsStopped}/${l.scamsTotal} stopped`) : `${l.test.done} of ${l.test.total}`,
         done && l.phase !== 'rejected' ? `${l.test.honestServed} of ${l.honestTotal} honest served` : `same model ${x.hash.slice(0, 8)}`, l.phase === 'rejected' ? 'loss' : done ? 'immune' : 'learning');
     }
   }
@@ -126,14 +126,14 @@ export function buildFlow(x: FlowInputs): FlowView {
   if (x.rollout && x.rollout.kind === 'immune') {
     const r = x.rollout;
     const all = r.stores.every((s) => s.ms != null);
-    set('runtimes', r.lastAppliedAt ?? r.at, all ? `immune in ${ms(Math.max(...r.stores.map((s) => s.ms ?? 0)))}` : 'applying…', storeMs(r.stores), 'immune');
+    set('runtimes', r.lastAppliedAt ?? r.at, all ? ms(Math.max(...r.stores.map((s) => s.ms ?? 0))) : 'applying…', storeMs(r.stores), 'immune');
     nodes.get('runtimes')!.stores = r.stores;
     if (all) photo = { version: r.version, ms: Math.max(...r.stores.map((s) => s.ms ?? 0)), at: (r.lastAppliedAt ?? r.at).toISOString() };
   }
   if (x.block) {
     const b = x.block;
     set('guard', new Date(b.at.getTime() - 1), 'blocked', b.title ? `rule: ${b.title}` : 'a learned rule', 'immune');   // round 2 stops at the same guard
-    set('block', b.at, `blocked at ${STORE_NAME[b.storeId]}`, b.title, 'immune');   // the detail: the rule that stopped it
+    set('block', b.at, `at ${STORE_NAME[b.storeId]}`, b.title, 'immune');   // the detail: the rule that stopped it
   }
   if (x.rollback) {
     const r = x.rollback;
@@ -163,8 +163,8 @@ export function buildFlow(x: FlowInputs): FlowView {
     if (node === 'shopper') set(node, e.at, e.value.split(' · ')[0], e.value.includes(' · ') ? `by ${e.value.split(' · ')[1]}` : cur.detail, cur.tone);
     else if (node === 'guard') set(node, e.at, e.value.split(':')[0], e.value.includes(':') ? e.value.split(':').slice(1).join(':').trim() : null,
       /block/.test(e.value) ? 'immune' : /cap/.test(e.value) ? 'learning' : cur.tone ?? 'served');
-    else if (node === 'ledgerStream' || node === 'stateStream') set(node, e.at, e.value, e.ms != null ? `delivered in ${ms(e.ms)}` : cur.detail, cur.tone);
-    else if (node === 'memory' && e.score != null) set(node, e.at, `matched ${e.score.toFixed(2)}`, cur.detail, 'learning');
+    else if (node === 'ledgerStream' || node === 'stateStream') set(node, e.at, e.ms != null ? ms(e.ms) : cur.value ?? 'sent', e.value, cur.tone);
+    else if (node === 'memory' && e.score != null) set(node, e.at, `match ${e.score.toFixed(2)}`, cur.detail, 'learning');
   }
 
   // The newest step is the active one, while it's recent.
@@ -192,7 +192,7 @@ function narrate(id: FlowNodeId | null, x: FlowInputs, nodes: Map<FlowNodeId, Fl
     case 'memory': return c ? [c.grouping === 'agent-memory' && c.incidents > 1 && c.matchScore != null
       ? `Atlas remembers it: the same trick, first seen at ${STORE_NAME[c.firstSeenStore]}`
       : `Atlas remembers it as a new con, first seen at ${STORE_NAME[c.firstSeenStore]}`, 'learning'] : [null, null];
-    case 'learner': return l?.rules[0] ? [`Claude wrote a rule in plain words: “${l.rules[0]}”`, 'learning'] : ['Claude is writing a rule from the cons Atlas remembered', 'learning'];
+    case 'learner': return l?.rules[0] ? [`Claude wrote ${l.ruleCount === 1 ? 'a rule' : `${l.ruleCount} rules`} in plain words from what Atlas remembered`, 'learning'] : ['Claude is writing a rule from the cons Atlas remembered', 'learning'];
     case 'gate': {
       const g = l?.test;
       if (!g) return [null, null];

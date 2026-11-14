@@ -8,7 +8,7 @@ import type { FlowNodeId } from '../../agent/screen/flow';
 import type { StoreId } from '../../shared/contract';
 import type { FlowData, Scene } from './types';
 
-const META: Record<FlowNodeId, { title: string; tech: string }> = {
+const META: Record<FlowNodeId, { title: string; tech: string; short?: string }> = {
   shopper: { title: 'A shopper asks', tech: 'chat or voice' },
   shopkeeper: { title: 'Claude serves', tech: 'Claude Sonnet 5.5' },
   guard: { title: 'The guard checks', tech: 'guardrail runtime' },
@@ -16,7 +16,7 @@ const META: Record<FlowNodeId, { title: string; tech: string }> = {
   ledgerStream: { title: 'Atlas tells the auditor', tech: 'change stream' },
   auditor: { title: 'Checked against the facts', tech: 'auditor' },
   incident: { title: 'The con lands', tech: 'incident' },
-  memory: { title: 'Atlas remembers it', tech: 'Atlas Agent Memory' },
+  memory: { title: 'Atlas remembers it', tech: 'Atlas Agent Memory', short: 'Agent Memory' },
   learner: { title: 'Claude writes a rule', tech: 'Claude Opus 5.5' },
   gate: { title: 'Proven on 120 unseen cases', tech: 'held-out gate' },
   guardrail: { title: 'A new policy', tech: 'guardrail doc' },
@@ -239,14 +239,14 @@ export function FlowScene({ flow }: { flow: FlowData }) {
             <div key={id} data-node={id} className="fl-node bs-glass" data-state={state} data-tone={n.tone ?? undefined}
               style={{ gridRow: row, gridColumn: col, ['--i' as string]: i }}>
               <div className="fl-title">{META[id].title}</div>
-              <div className="fl-tech">{META[id].tech}</div>
+              <div className="fl-tech">{META[id].short
+                ? <><span className="fl-wide">{META[id].tech}</span><span className="fl-narrow">{META[id].short}</span></> : META[id].tech}</div>
               {n.stores && n.stores.length > 0 && <Stores stores={n.stores} small />}
-              <div className="fl-value" data-alt={n.stores?.length ? 'true' : undefined}>{n.value ? <Count text={n.value} /> : '—'}</div>
+              <div className="fl-value" data-alt={n.stores?.length ? 'true' : undefined}>{n.value ? <Count text={n.value} /> : null}</div>
             </div>
           );
         })}
 
-        <div className="fl-next" style={{ gridRow: 2, gridColumn: 1 }} aria-hidden="true">↑ the next shopper</div>
         <div className="fl-centre" style={{ gridRow: '2 / 4', gridColumn: '2 / 6' }} data-tone={tone ?? undefined} data-focus={focus ?? undefined}>
           <div className="fl-eyebrow" key={`${chapter}-${step}`}>
             <span className="fl-chapter">{chapter}</span>
@@ -272,9 +272,9 @@ function Hero({ flow, focus, holding, value, detail, stores }: { flow: FlowData;
     return <Stores stores={list} />;
   }
   if (focus === 'gate' && flow.gate) return <GateDots gate={flow.gate} />;
-  if (focus === 'block' && detail) return (
-    <div className="fl-hero-value" key={`block-${detail}`}>
-      <div className="fl-hero-detail">the rule that stopped it</div>
+  if ((focus === 'block' || focus === 'learner') && detail) return (
+    <div className="fl-hero-value" key={`${focus}-${detail}`}>
+      <div className="fl-hero-detail">{focus === 'block' ? 'the rule that stopped it' : value === '1 rule' ? 'the rule' : `the first of ${value}`}</div>
       <div className="fl-quote">“{detail}”</div>
     </div>
   );
