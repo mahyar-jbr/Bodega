@@ -80,6 +80,7 @@
 .bs-state[data-tone="learning"] { --tone: var(--learning); }
 .bs-state[data-tone="immune"] { --tone: var(--immune); }
 .bs-state[data-tone="idle"] { --tone: var(--ink-3); }
+.bs-state[data-tone="served"] { --tone: var(--served); }
 .bs-state-word { animation: bs-blur-in var(--dur-panel) var(--ease-out); }
 
 /* Store tiles */
@@ -282,3 +283,15 @@
 .bs-rule[data-new]::before { content: "New \201C"; color: var(--brand-ink); }
 .bs-state[data-tone="offline"] { --tone: var(--ink-3); }
 .bs-tile[data-status="offline"] .bs-tile-name, .bs-tile[data-status="offline"] .bs-tile-numbers { opacity: 0.45; }
+
+/* Flash sale */
+.bs-flash-grid { display: grid; grid-template-columns: 1fr auto; gap: var(--space-12); margin-top: 12px; }
+.bs-bots { display: grid; grid-template-columns: repeat(25, 14px); gap: 14px 12px; }
+.bs-hoodies { display: grid; grid-template-columns: repeat(5, 56px); gap: 12px; }
+.bs-hoodie { display: grid; place-items: center; height: 56px; border-radius: var(--radius-md); border: 1px solid var(--line-strong); color: var(--ink-faint); }
+.bs-hoodie[data-sold] { border-color: var(--served); color: var(--served); background: color-mix(in srgb, var(--served) 10%, transparent); }
+.bs-flash-foot { margin-top: auto; border-top: 1px solid var(--line); padding-top: 20px; display: flex; align-items: flex-end; gap: var(--space-12); }
+.bs-flash-num { display: flex; align-items: baseline; gap: 12px; }
+.bs-stage[data-narrow] .bs-bots { grid-template-columns: repeat(20, 13px); gap: 12px 10px; }
+.bs-stage[data-narrow] .bs-hoodies { grid-template-columns: repeat(5, 48px); }
+.bs-stage[data-narrow] .bs-hoodie { height: 48px; }

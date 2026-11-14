@@ -1,7 +1,7 @@
 // The big screen's scene panels: learning (M4-01), immunity and forget, and the results (M4-03).
 import { AwningMark } from './parts';
 import { clock, money, seconds } from './format';
-import { storeName, type AuditData, type ConRow, type LearningData, type VersionPoint, type ResultsData, type RolloutData, type TestProgress } from './types';
+import { storeName, type AuditData, type ConRow, type FlashData, type LearningData, type VersionPoint, type ResultsData, type RolloutData, type TestProgress } from './types';
 
 // ── Learning ──────────────────────────────────────────────────────────────────────────────
 
@@ -338,4 +338,55 @@ export function timelineTops(stores: { store: string; ms: number | null }[], sca
   const overflow = tops[tops.length - 1] - BOTTOM;
   if (overflow > 0) for (let i = 0; i < tops.length; i++) tops[i] = Math.max(TOP + i * MIN_GAP, tops[i] - overflow);
   return new Map(order.map((s, i) => [s.store, Math.min(BOTTOM, tops[i])]));
+}
+
+// ── The flash sale (M4-09, stretch): 100 bots, 10 hoodies, exactly 10 sold ──────────────────
+
+const HOODIE = 'M9 4.2c-2 .8-3.4 1.8-4.5 3.1L3 13.2l2.6 1 1-3V20.5h10.8v-9.3l1 3 2.6-1-1.5-5.9c-1.1-1.3-2.5-2.3-4.5-3.1M9 4.2c.4 2.2 1.5 3.4 3 3.4s2.6-1.2 3-3.4M10.3 7.3v3.2M13.7 7.3v3.2M9 15.6h6l.6 2.9H8.4z';
+
+/** Which of the bots got a hoodie: spread across the grid, the same every render (the ledger doesn't say which). */
+function winners(attempted: number, sold: number): Set<number> {
+  const out = new Set<number>();
+  for (let i = 0; out.size < Math.min(sold, attempted); i++) out.add((i * 37 + 11) % attempted);
+  return out;
+}
+
+export function FlashPanel({ data }: { data: FlashData }) {
+  const won = winners(data.attempted, data.sold);
+  const ok = data.passed && data.oversold === 0;
+  return (
+    <section className="bs-glass bs-panel bs-scene" aria-label="Flash sale">
+      <div className="bs-panel-head">
+        <h2 className="stage-title">Flash sale at {storeName(data.store)}</h2>
+        <span className="bs-state stage-callout" data-tone={ok ? 'served' : 'conned'}><span className="bs-dot" />
+          <span className="bs-state-word">{ok ? (data.stockAfter === 0 ? 'Sold out' : 'Done') : 'Check failed'}</span></span>
+      </div>
+      <div className="bs-flash-grid">
+        <div>
+          <div className="stage-label bs-quiet" style={{ marginBottom: 14 }}><b className="bs-ink bd-num">{data.attempted}</b> shoppers at once</div>
+          <div className="bs-bots">{Array.from({ length: data.attempted }, (_, i) => <span key={i} className="bs-tdot" data-state={won.has(i) ? 'served' : 'waiting'} />)}</div>
+        </div>
+        <div>
+          <div className="stage-label bs-quiet" style={{ marginBottom: 14 }}><b className="bs-ink bd-num">{data.stock}</b> limited hoodies</div>
+          <div className="bs-hoodies">
+            {Array.from({ length: data.stock }, (_, i) => (
+              <span key={i} className="bs-hoodie" data-sold={i < data.sold ? 'true' : undefined}>
+                <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={HOODIE} /></svg>
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="bs-flash-foot">
+        <div className="bs-flash-num"><span className="stage-display bd-num">{data.sold}</span><span className="stage-heading bs-quiet">sold</span></div>
+        <div className="bs-flash-num"><span className="stage-display bd-num" style={{ color: data.oversold === 0 ? 'var(--immune)' : 'var(--loss)' }}>{data.oversold}</span><span className="stage-heading bs-quiet">oversold</span></div>
+        <div className="stage-label bs-quiet-2" style={{ maxWidth: 520 }}>
+          Every order is one Atlas transaction, so stock never goes below zero.{' '}
+          {data.walletsMatchLedger && data.noNegativeWallets
+            ? 'Every wallet matches its ledger, and none went negative.'
+            : <span style={{ color: 'var(--loss)' }}>{!data.walletsMatchLedger ? 'A wallet does not match its ledger. ' : ''}{!data.noNegativeWallets ? 'A wallet went negative.' : ''}</span>}
+        </div>
+      </div>
+    </section>
+  );
 }

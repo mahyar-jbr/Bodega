@@ -62,6 +62,8 @@ export const MOCK: ScreenData = {
       gate: { verdict: 'promoted', scamsBefore: 36, scamsAfter: 2, scamsTotal: 60, awayBefore: 2, awayAfter: 1, honestTotal: 60,
         settingsHash: '6adbcc65b15bc033c4cb5aad921eca17af4ed709e768632c7b5fe0f82df4b345', evaluationId: 'e1' } },
   }],
+  flash: { store: 'queen', attempted: 100, sold: 10, stock: 10, stockAfter: 0, oversold: 0, walletsMatchLedger: true,
+    noNegativeWallets: true, passed: true, durationMs: 1_840, at: ago(30).toISOString() },
   results: {
     before: { version: 0, scamsPct: 60, honestAway: 2 },
     after: { version: 1, scamsPct: 3.3, honestAway: 1 },

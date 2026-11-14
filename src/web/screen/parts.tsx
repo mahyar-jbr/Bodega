@@ -57,13 +57,14 @@ export function StageFrame({ children }: { children: ReactNode }) {
 
 const SCENE_TONE: Record<Scene, string> = {
   round1: 'var(--loss)', learning: 'var(--learning)', immunity: 'var(--immune)',
-  round2: 'var(--immune)', memory: 'var(--learning)', audit: 'var(--learning)',
+  round2: 'var(--immune)', memory: 'var(--learning)', audit: 'var(--learning)', flash: 'var(--served)',
 };
 
 export function StageHeader({ scene }: { scene: Scene }) {
-  // The audit trail belongs to the Memory beat.
-  const beats = SCENES.filter((s) => s.key !== 'audit');
-  const current = beats.findIndex((s) => s.key === (scene === 'audit' ? 'memory' : scene));
+  // The audit trail belongs to the Memory beat, and the flash sale (for questions) to Round 2.
+  const beats = SCENES.filter((s) => s.key !== 'audit' && s.key !== 'flash');
+  const beat = scene === 'audit' ? 'memory' : scene === 'flash' ? 'round2' : scene;
+  const current = beats.findIndex((s) => s.key === beat);
   return (
     <header className="bs-header">
       <div className="bs-logo">

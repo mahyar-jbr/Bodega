@@ -4,12 +4,12 @@ import './screen.css';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useScreenData } from './live';
-import { AuditPanel, LearningPanel, MemoryPanel, ResultsRow, RolloutPanel, VersionChart } from './panels';
+import { AuditPanel, FlashPanel, LearningPanel, MemoryPanel, ResultsRow, RolloutPanel, VersionChart } from './panels';
 import { ConWall, LiveFeed, StageFrame, StageHeader, StoreTile } from './parts';
 import { SCENES, type Scene, type ScreenData } from './types';
 
 // On the presenting laptop: 1 to 5 pin a scene, 0 goes back to the scene the state suggests.
-// 6 opens the audit trail; pressing 6 again moves to the next con.
+// 6 opens the audit trail; pressing 6 again moves to the next con. 7 shows the flash sale.
 function usePinnedScene(): { pinned: Scene | null; auditIndex: number; openAudit: (i: number) => void } {
   const [pinned, setPinned] = useState<Scene | null>(null);
   const [auditIndex, setAuditIndex] = useState(0);
@@ -77,6 +77,7 @@ function MainPanel({ scene, data, auditIndex, onOpenCon }: { scene: Scene; data:
     const i = auditIndex % data.audits.length;
     return <AuditPanel key={`audit-${data.audits[i].conId}`} audit={data.audits[i]} index={i} count={data.audits.length} />;
   }
+  if (scene === 'flash' && data.flash) return <FlashPanel key="flash" data={data.flash} />;
   if (scene === 'learning' && data.learning) return <LearningPanel key="learning" data={data.learning} />;
   if (scene === 'immunity' && data.rollout) return <RolloutPanel key={`rollout-${data.rollout.kind}`} data={data.rollout} />;
   if (scene === 'round2' && data.results) {

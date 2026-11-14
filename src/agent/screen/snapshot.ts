@@ -13,7 +13,7 @@ const STORES: StoreId[] = ['queen', 'yonge', 'scarborough'];
 const STORE_NAME: Record<StoreId, string> = { queen: 'Queen St', yonge: 'Yonge St', scarborough: 'Scarborough' };
 const FEED_MAX = 8;
 
-export type Scene = 'round1' | 'learning' | 'immunity' | 'round2' | 'memory';
+export type Scene = 'round1' | 'learning' | 'immunity' | 'round2' | 'memory' | 'audit' | 'flash';
 export type StoreStatus = 'idle' | 'conned' | 'learning' | 'immune' | 'offline';
 export type FeedKind = 'sale' | 'con-worked' | 'con-blocked' | 'rule-promoted' | 'rule-rejected' | 'learning' | 'rollback';
 
@@ -47,12 +47,28 @@ export interface ScreenSnapshot {
   };
   versions: { v: number; label: string; scamsPct: number; honestAwayPct: number; rejected: boolean }[];
   audits: AuditTrail[];
+  flash: FlashSale | null;
   results: null | {
     before: { version: number; scamsPct: number; honestAway: number };
     after: { version: number; scamsPct: number; honestAway: number };
     honestTotal: number;
     immunityMs: number | null;
   };
+}
+
+/** The flash sale (M4-05, stretch): 100 bots race for 10 hoodies in Atlas transactions. */
+export interface FlashSale {
+  store: StoreId;
+  attempted: number;
+  sold: number;
+  stock: number;                   // hoodies on the shelf when it started
+  stockAfter: number;
+  oversold: number;
+  walletsMatchLedger: boolean;
+  noNegativeWallets: boolean;
+  passed: boolean;
+  durationMs: number | null;
+  at: string;
 }
 
 /** One con, end to end: what moved, what the auditor saw, how memory grouped it, and what blocks it now. */
@@ -341,6 +357,25 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
     };
   });
 
+  // ── The latest flash sale since the last reset (Kasra's bot_runs, kind 'flash') ──
+  const flashDoc = await db.collection('bot_runs').find({ kind: 'flash' }).sort({ _id: -1 }).limit(1).next();
+  let flash: FlashSale | null = null;
+  if (flashDoc) {
+    const at = new Date(flashDoc.finishedAt ?? flashDoc.endedAt ?? flashDoc.at ?? flashDoc.createdAt ?? flashDoc.startedAt ?? (flashDoc._id as { getTimestamp?: () => Date }).getTimestamp?.() ?? Date.now());
+    const sold = Number(flashDoc.succeeded ?? flashDoc.salesCount ?? 0);
+    const stockAfter = Number(flashDoc.stockAfter ?? 0);
+    const stock = Number(flashDoc.stockBefore ?? flashDoc.stock ?? sold + stockAfter);
+    if (at >= epochStart) {
+      flash = {
+        store: (flashDoc.storeId as StoreId) ?? 'queen', attempted: Number(flashDoc.attempted ?? 100), sold, stock, stockAfter,
+        oversold: Math.max(0, sold - stock), walletsMatchLedger: flashDoc.walletsMatchLedger === true,
+        noNegativeWallets: flashDoc.noNegativeWallets === true, passed: flashDoc.passed === true,
+        durationMs: typeof flashDoc.duration === 'number' ? flashDoc.duration : typeof flashDoc.durationMs === 'number' ? flashDoc.durationMs : null,
+        at: at.toISOString(),
+      };
+    }
+  }
+
   // ── Feed: the newest events, two lines each ──
   const catchupFeed = await db.collection<RolloutDoc>(ROLLOUTS)
     .find({ change: 'catchup', ...(sinceReset ? { appliedAt: { $gte: sinceReset } } : {}) }).sort({ appliedAt: -1 }).limit(3).toArray();
@@ -377,6 +412,10 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
       who: g.status === 'rejected' ? `v${g._id} rejected` : `Policy v${g._id} is live`,
       text: short(g.status === 'rejected' ? 'Failed the 120-case test' : promotedText(g, byVersion.get(g.parentVersion ?? 0))),
       amountCents: null, at: (g.promotedAt ?? g.createdAt).toISOString() })),
+    ...(flash ? [{
+      id: `f:${flash.at}`, kind: (flash.passed ? 'sale' : 'rule-rejected') as FeedKind, who: `Flash sale at ${STORE_NAME[flash.store]}`,
+      text: short(flash.passed ? `${flash.attempted} shoppers, exactly ${flash.sold} sold` : 'A check failed: see the scene'),
+      amountCents: null, at: flash.at }] : []),
     ...catchupFeed.map((r) => ({
       id: `c:${r.storeId}:${r.version}:${new Date(r.changedAt).getTime()}`, kind: 'rule-promoted' as const,
       who: `${STORE_NAME[r.storeId]} is back online`,
@@ -398,7 +437,7 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
     : state?.change === 'promote' && sinceChange < 30_000 ? 'immunity'
     : activeVersion > 0 ? 'round2' : 'round1';
 
-  return { scene, activeVersion, epoch, tiles, feed, cons: conRows, learning, rollout, versions, audits, results };
+  return { scene, activeVersion, epoch, tiles, feed, cons: conRows, learning, rollout, versions, audits, flash, results };
 }
 
 /** One rollout per store for a change: duplicates (by store, version, change and changedAt) collapse to the fastest. */
