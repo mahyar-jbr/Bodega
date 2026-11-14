@@ -29,6 +29,7 @@ export interface ScreenSnapshot {
   cons: { id: string; summary: string; firstSeen: StoreId; worked: number; blocked: number; coveredBy: number | null }[];
   learning: null | {
     phase: 'incident' | 'drafting' | 'testing' | 'promoted' | 'rejected';
+    title?: string;                // the panel's title when it isn't "Learning from <store>" (the gate demo)
     store: StoreId;
     incident: { summary: string; detail: string; lostCents: number };
     // The candidate's rule titles, new ones first; what it builds on (parent 0 = v0, no rules).
@@ -157,9 +158,15 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
     blocked: blockedPerCon.get(c._id) ?? 0, coveredBy: c.coveredBy,
   }));
 
-  // ── Learning: the newest learning cycle (learning_runs), its attempt's held-out test and verdict ──
+  // ── Learning: the newest learning cycle (learning_runs) or gate demo in this epoch, its held-out test and verdict ──
+  // A reset starts a new epoch: nothing from before it shows on the learning panel.
+  const lastReset = await db.collection<RolloutDoc>(ROLLOUTS).find({ change: 'reset' as never }).sort({ changedAt: -1 }).limit(1).next();
+  const epochStart = state?.change === 'reset' ? state.changedAt : lastReset?.changedAt ?? new Date(0);
   const run = await db.collection<LearningRunDoc>('learning_runs').find({ epoch }).sort({ startedAt: -1 }).limit(1).next();
-  const newest = guardrails.find((g) => g.source !== 'v0');
+  // The gate demo has no learning run: follow its evaluation when it's the newest thing this epoch.
+  const demoEval = evaluations.find((e) => e.purpose === 'gate-demo' && e.startedAt >= epochStart);
+  const demo = demoEval && (!run || demoEval.startedAt > run.startedAt) ? demoEval : undefined;
+  const newest = guardrails.find((g) => g.source !== 'v0' && g.source !== 'gate-demo' && g.createdAt >= epochStart);
   let learning: ScreenSnapshot['learning'] = null;
   const attempt = run?.attempts.at(-1);
   // The learner stores the attempt's evaluation id only once the gate returns: until then, the running
@@ -169,7 +176,26 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
       ?? await db.collection<EvaluationDoc>('evaluations').findOne({ _id: new ObjectId(attempt.evaluationId) })
     : attempt ? evaluations.find((e) => e.version === attempt.version && e.startedAt >= run!.startedAt)
     : !run && newest ? recentEvals.find((e) => e.version === newest._id) : undefined;
-  if (run || state?.learning || newest) {
+  if (demo) {
+    const g = byVersion.get(demo.version);
+    const gateRec = (g as (GuardrailDoc & { gate?: { reasons: string[]; candidate: { honestTurnedAway: number; honestTotal: number; scamSuccess: number; scamsTotal: number } } }) | undefined)?.gate;
+    const done = demo.status !== 'running';
+    const phase: NonNullable<ScreenSnapshot['learning']>['phase'] = !done ? 'testing' : g?.status === 'promoted' ? 'promoted' : 'rejected';
+    const sDemo = demo.summary;
+    learning = {
+      phase, store: 'queen', title: 'Testing a too-strict version',
+      incident: { summary: 'A deliberately too-strict guardrail', detail: 'No discounts and no refunds, even real ones', lostCents: 0 },
+      guardrail: { version: demo.version, rules: g?.rules.map((r) => r.title) ?? [], newRules: g?.rules.length ?? 0, parentVersion: 0, parentRules: 0 },
+      test: demo.progress, scamsTotal: sDemo?.scams.total ?? 60, honestTotal: sDemo?.honest.total ?? 60,
+      settingsHash: demo.settingsHash ?? deps.settingsHash,
+      verdict: !done ? null
+        : phase === 'rejected'
+          ? (gateRec && gateRec.candidate.honestTurnedAway > 0
+            ? `Rejected: ${gateRec.candidate.honestTurnedAway} of ${gateRec.candidate.honestTotal} honest customers turned away`
+            : `Rejected: ${gateRec?.reasons[0] ?? 'it did not beat the current version'}`)
+          : 'Promoted',
+    };
+  } else if (run || state?.learning || newest) {
     const phase: NonNullable<ScreenSnapshot['learning']>['phase'] = run
       ? run.phase === 'learning' ? 'drafting'
         : run.phase === 'gating' ? 'testing'
@@ -366,6 +392,7 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
   const scene: Scene =
     state?.change === 'rollback' && sinceChange < 60_000 ? 'immunity'
     : learning && (learning.phase === 'drafting' || learning.phase === 'testing') ? 'learning'
+    : demo && learning && demo.finishedAt && Date.now() - demo.finishedAt.getTime() < 60_000 ? 'learning'
     : learning?.phase === 'rejected' && run?.finishedAt && Date.now() - run.finishedAt.getTime() < 60_000 ? 'learning'
     : learning?.phase === 'rejected' && !run && newest && Date.now() - newest.createdAt.getTime() < 60_000 ? 'learning'
     : state?.change === 'promote' && sinceChange < 30_000 ? 'immunity'

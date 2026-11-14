@@ -58,7 +58,7 @@ export function LearningPanel({ data }: { data: LearningData }) {
   return (
     <section className="bs-glass bs-panel bs-scene" aria-label="Learning">
       <div className="bs-panel-head">
-        <h2 className="stage-title">Learning from {storeName(data.store)}</h2>
+        <h2 className="stage-title">{data.title ?? `Learning from ${storeName(data.store)}`}</h2>
         <span className="bs-state stage-callout" data-tone={tone}><span className="bs-dot" /><span key={word} className="bs-state-word">{word}</span></span>
       </div>
       <div className="bs-learn-cols">
@@ -66,7 +66,7 @@ export function LearningPanel({ data }: { data: LearningData }) {
           <div className="stage-label bs-col-label">What happened</div>
           <div className="stage-body">{data.incident.summary}</div>
           <div className="stage-label bs-quiet bs-detail" style={{ marginTop: 8 }}>{data.incident.detail}</div>
-          <div className="stage-number bd-num" style={{ color: 'var(--loss)', marginTop: 20 }}>{'−'}{money(data.incident.lostCents)}</div>
+          {data.incident.lostCents > 0 && <div className="stage-number bd-num" style={{ color: 'var(--loss)', marginTop: 20 }}>{'−'}{money(data.incident.lostCents)}</div>}
         </div>
         <div className="bs-learn-col" data-step={steps[1]}>
           <div className="stage-label bs-col-label">New guardrail, in plain words</div>

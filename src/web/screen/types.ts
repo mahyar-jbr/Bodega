@@ -70,6 +70,7 @@ export interface TestProgress {
 
 export interface LearningData {
   phase: LearningPhase;
+  title?: string;                        // overrides "Learning from <store>" (the gate demo)
   store: StoreKey;                       // where the con was first seen
   incident: { summary: string; detail: string; lostCents: number };
   guardrail: { version: number; rules: string[]; newRules?: number; parentVersion?: number; parentRules?: number };   // rule titles, new ones first
