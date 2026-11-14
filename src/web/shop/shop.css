@@ -440,7 +440,12 @@
 }
 
 .shop-quick-replies button:hover { background: var(--glass-sheen-strong); }
-.shop-compose-row { display: flex; align-items: flex-end; gap: 10px; }
+.shop-compose-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: end;
+  gap: 10px;
+}
 
 .shop-compose-field { position: relative; min-width: 0; flex: 1; }
 
@@ -514,9 +519,6 @@
 .shop-voice-replay:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
 .shop-voice-status,
 .shop-voice-replay {
-  position: absolute;
-  right: 16px;
-  bottom: calc(100% + 8px);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -535,7 +537,14 @@
   background: transparent;
   font-weight: 600;
 }
-.shop-voice-status { max-width: calc(100% - 32px); border-radius: var(--radius-md); }
+.shop-voice-status {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  justify-self: end;
+  max-width: 100%;
+  border-radius: var(--radius-md);
+}
+.shop-voice-replay { position: absolute; right: 16px; bottom: calc(100% + 8px); }
 .shop-voice-status button { flex-shrink: 0; }
 .shop-listening-cue { display: flex; align-items: center; justify-content: flex-end; gap: 5px; margin-top: 7px; color: var(--ink-3); font-size: var(--ui-micro-font-size); }
 .shop-listening-cue i { width: 6px; height: 6px; border-radius: 50%; background: var(--brand); animation: shop-typing var(--dur-loop) ease-in-out infinite; }
