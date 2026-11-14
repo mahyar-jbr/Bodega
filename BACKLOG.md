@@ -102,8 +102,8 @@ Frozen at 16:15, submitted by 16:50 (the deadline is 17:00), and rehearsed by 17
 | ID | Task | Done when | Owner | By | State |
 |---|---|---|---|---|---|
 | F02 | Fixes from testing | Done during the day: the iPhone voice, auto-play, the live transcript, shop tabs surviving a reset, the /stage layout on laptop windows | both | 16:15 | Done |
-| F03 | Code freeze | No code is pushed after 16:15 (README.md excepted), the last deploy is green, `npm run fresh-show` has run on the live database and `npm run smoke` passes | both | 16:15 | Not started |
-| F01 | README | Final: visuals, the video link, the voice line, the Flow scene, and the live test results (3 of 3 stage runs, a judge probe with 0 of 20 cons working) | Mahyar | 16:40 | In progress |
+| F03 | Code freeze and clean slate | No code pushed after 16:15 (README excepted); at about 16:30 `npm run fresh-show` on the live database (the first learned version reads Policy v1), `npm run smoke` 6/6, then the ops Reset so judging starts on v0 | Mahyar | 16:30 | Not started |
+| F01 | README | Final: the video link, the voice line, the Flow scene, the live test results, and fresh visuals of the Flow scene, the 5-tab /stage and voice (being captured now) | Mahyar | 16:40 | In progress |
 | F04 | Launch video | The 1-minute launch video, with ElevenLabs narration and two real voice calls to the live app, is on YouTube and linked in the README | Mahyar | 16:30 | Done |
 | F05 | Backup | The launch video (YouTube) and the README's live visuals are the backup: if the live app fails on stage, play the video | Kasra | 16:40 | Done |
 | F06 | Submitted | The repo is checked for personal files and secrets, the `pre-event` tag and the README's "Built at the event" section are in place, and the live link, description, video, problem statement 2 and both of us are on the submission page | Mahyar | 16:50 | Done |
