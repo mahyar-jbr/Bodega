@@ -91,11 +91,18 @@ export class AgentError extends Error {
   code: ChatErrorCode;
   constructor(code: ChatErrorCode, message: string) { super(message); this.code = code; }
 }
+/** A version that passed the gate while approval is required: it waits for a person (approve or reject). */
+export interface AwaitingApproval {
+  version: number; title: string; rules: string[];          // rule titles
+  scamSuccess: number; scamsTotal: number; honestTurnedAway: number; honestTotal: number;   // its gate run
+  since: Date;
+}
 export interface AgentApi {
   start(): Promise<void>;                                    // auditor, learner, store runtimes
   handleMessage(input: { shopperId: string; storeId: StoreId; text: string }): Promise<ChatReply>;
   state(): Promise<{ activeVersion: number; learning: boolean; learningPaused: boolean;
-    stores: { storeId: StoreId; appliedVersion: number; appliedAt: Date | null; online: boolean }[] }>;
+    stores: { storeId: StoreId; appliedVersion: number; appliedAt: Date | null; online: boolean }[];
+    approvalRequired?: boolean; awaitingApproval?: AwaitingApproval | null }>;
   metrics(): Promise<{ storeId: StoreId; lostCents: number; blockedCents: number;
     perMinute: { minute: Date; lostCents: number; blockedCents: number }[] }[]>;
   learnNow(): Promise<{ started: boolean; reason?: string }>;
@@ -104,6 +111,13 @@ export interface AgentApi {
   rollback(): Promise<{ fromVersion: number; toVersion: number }>;   // take back the active version: every store forgets it, learning pauses
   reset(): Promise<void>;                                    // every store back to v0, learning resumes
   setStoreOnline(storeId: StoreId, online: boolean): Promise<void>;   // stretch S1
+  // Governance (added Nov 14 after M4). Optional only so that existing fakes still type-check; the
+  // real agent implements every one.
+  setApprovalRequired?(on: boolean): Promise<{ approvalRequired: boolean }>;   // a version that passes the gate waits for a person
+  approve?(): Promise<{ approved: boolean; version?: number; fromVersion?: number; reason?: string }>;   // the waiting version goes live
+  reject?(reason?: string): Promise<{ rejected: boolean; version?: number; reason?: string }>;           // the waiting version never goes live
+  forgetShopper?(shopperId: string): Promise<{ conversationsDeleted: number; incidentsRedacted: number }>;
+  proveMemoryRules?(): Promise<{ at: Date; collection: string; field: string; refused: boolean; code: number | null; codeName: string | null }>;
 }
 
 // Live events: the "screen" topic streams these collections; these fields are always stripped.
