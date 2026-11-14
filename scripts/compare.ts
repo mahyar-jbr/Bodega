@@ -1,24 +1,36 @@
-// npm run compare -- 0 3 [--set heldout|dev]
+// npm run compare -- 0 3 [--set heldout|dev] [--archive [--epoch N]]
 // Prints two guardrail versions' latest recorded evaluations side by side, overall and per
 // category, with both shopkeeper settings hashes: the proof that only the rules changed.
+// --archive reads versions other than v0 from evaluations_archive (what `npm run fresh-show` set aside),
+// newest first, or from one show with --epoch; v0's baselines always stay live.
 import '../src/server/env';
 import { parseArgs } from 'node:util';
 import type { EvaluationDoc } from '../src/agent/eval/record';
 import type { CategoryResult, EvalSummary } from '../src/agent/eval/runner';
 import { closeDb, dbName, getDb } from '../src/shared/db';
 
-const { values, positionals } = parseArgs({ allowPositionals: true, options: { set: { type: 'string', default: 'heldout' } } });
+const { values, positionals } = parseArgs({ allowPositionals: true, options: {
+  set: { type: 'string', default: 'heldout' }, archive: { type: 'boolean', default: false }, epoch: { type: 'string' },
+} });
 const [a, b] = positionals.map(Number);
 if (positionals.length !== 2 || [a, b].some((n) => !Number.isInteger(n) || n < 0)) {
-  console.error('usage: npm run compare -- <version> <version> [--set heldout|dev]');
+  console.error('usage: npm run compare -- <version> <version> [--set heldout|dev] [--archive [--epoch N]]');
   process.exit(1);
 }
 
-const evaluations = getDb().collection<EvaluationDoc>('evaluations');
-async function latest(version: number) {
-  const doc = await evaluations.findOne({ set: values.set as EvaluationDoc['set'], version, status: 'done' }, { sort: { finishedAt: -1 } });
-  if (!doc?.summary) throw new Error(`no finished ${values.set} evaluation of v${version} in ${dbName()}.evaluations`);
-  return doc as EvaluationDoc & { summary: EvalSummary };
+type Stored = EvaluationDoc & { summary: EvalSummary; archivedAt?: Date; epoch?: number };
+const evaluations = getDb().collection<Stored>('evaluations');
+const archive = getDb().collection<Stored>('evaluations_archive');
+async function latest(version: number): Promise<Stored & { from: string }> {
+  const filter = { set: values.set as EvaluationDoc['set'], version, status: 'done' as const };
+  if (values.archive && version !== 0) {
+    const epochFilter = values.epoch ? { epoch: Number(values.epoch) } : {};
+    const doc = await archive.findOne({ ...filter, ...epochFilter }, { sort: { archivedAt: -1, finishedAt: -1 } });
+    if (doc?.summary) return { ...doc, from: `archive${doc.epoch != null ? `, epoch ${doc.epoch}` : ''}` };
+  }
+  const doc = await evaluations.findOne(filter, { sort: { finishedAt: -1 } });
+  if (!doc?.summary) throw new Error(`no finished ${values.set} evaluation of v${version} in ${dbName()}.evaluations${values.archive ? ' or its archive' : ''}`);
+  return { ...doc, from: 'live' };
 }
 
 const [before, after] = await Promise.all([latest(a), latest(b)]);
@@ -28,8 +40,8 @@ const pad = (s: string | number, n: number) => String(s).padStart(n);
 const when = (d: Date | null) => (d ? d.toISOString().slice(0, 16).replace('T', ' ') : '?');
 
 console.log(`v${a} against v${b} on the ${values.set} set (${sa.total} cases), ${dbName()}`);
-console.log(`  v${a}: settings ${before.settingsHash ?? 'none'}  commit ${before.commit ?? '?'}  ${when(before.finishedAt)}`);
-console.log(`  v${b}: settings ${after.settingsHash ?? 'none'}  commit ${after.commit ?? '?'}  ${when(after.finishedAt)}`);
+console.log(`  v${a}: settings ${before.settingsHash ?? 'none'}  commit ${before.commit ?? '?'}  ${when(before.finishedAt)}  (${before.from})`);
+console.log(`  v${b}: settings ${after.settingsHash ?? 'none'}  commit ${after.commit ?? '?'}  ${when(after.finishedAt)}  (${after.from})`);
 const same = !!before.settingsHash && before.settingsHash === after.settingsHash;
 console.log(same
   ? '  Same model, same prompt: the settings hashes match. Only the guardrail rules changed.'
