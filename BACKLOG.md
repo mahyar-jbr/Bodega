@@ -14,8 +14,8 @@
 | M1 | A real purchase through chat on a phone | M1-09, on the deployed app | 12:40 | Done |
 | M2 | v0 gets conned, incidents and cons land in Atlas under the memory rules, and a version rolls out to every store and back | M2-09 | 14:20 | Done |
 | M3 | The stores learn: a version is proven on the held-out set, goes live everywhere, and Roll back takes it back | M3-10, on the deployed app | 15:25 | Done |
-| M4 | The 3-minute demo works end to end, driven only by us, and is recorded | M4-10 | 16:00 | Done |
-| Submit | Frozen, submitted and rehearsed | F06, submitted | 16:50 | 0 of 8 |
+| M4 | The 3-minute demo works end to end, driven only by us, on the live app | M4-10 | 16:00 | Done |
+| Submit | Frozen, submitted and rehearsed | F06, submitted | 16:50 | 2 of 8 |
 
 **Owners:**
 - **Mahyar** owns the agent side. His PM tab hands each of his tasks to one of two coding tabs.
@@ -105,7 +105,7 @@ Frozen at 16:15, submitted by 16:50 (the deadline is 17:00), and rehearsed by 17
 | F03 | Code freeze | No code is pushed after 16:15 (README.md excepted), the last deploy is green, and the show is reset to v0 | both | 16:15 | Not started |
 | F01 | README | It's finished from the draft (the helper's, by 15:30) with the day's numbers | Mahyar | 16:40 | In progress |
 | F04 | Launch video | The 1-minute launch video is uploaded and linked on the submission. It's a launch-style piece made by the PM's helper, not a recording of us: motion graphics in Bodega's design system, short captures of the live app (a con at Queen St, the learning panel, every store turning immune, Yonge refusing, the rollback) and the day's real numbers. The recorded run stays as the backup | Mahyar | 16:30 | Done |
-| F05 | Backup | The recorded run is the backup, re-recorded only if the build changed after the freeze | Kasra | 16:40 | Not started |
+| F05 | Backup | The launch video (YouTube) and the README's live visuals are the backup: if the live app fails on stage, play the video | Kasra | 16:40 | Done |
 | F06 | Submitted | The repo is checked for personal files and secrets, the `pre-event` tag and the README's "Built at the event" section are in place, and the live link, description, video, problem statement 2 and both of us are on the submission page | Mahyar | 16:50 | Not started |
 | F07 | Rehearsed | The 3-minute demo twice and the 90-second version once | both | 17:10 | Not started |
 | F08 | Service deleted | The Render service is deleted after judging | Mahyar | After judging | Not started |
@@ -115,7 +115,7 @@ Frozen at 16:15, submitted by 16:50 (the deadline is 17:00), and rehearsed by 17
 | ID | Task | Owner | State |
 |---|---|---|---|
 | X1 | A store goes offline, a new con is learned, and the store catches up live when it's back | both | Done |
-| X2 | A voice hotline with ElevenLabs (it needs an ElevenLabs key) | Mahyar | Not started |
+| X2 | Voice with ElevenLabs: push-to-talk in the shop (speech-to-text, the same frozen shopkeeper and guard, text-to-speech), live on Android and Chrome; the iPhone fix (#7) and a live transcript (realtime Scribe) are in progress | Mahyar | In progress |
 | X3 | Atlas agent memory for regular customers | Mahyar | Not started |
 | X4 | An audit-trail panel for one con: its summary, ledger entries, incident and the version that blocks it | Mahyar | Done |
 | X5 | Approve before going live: with approvalRequired on, a proven version waits for a person to tap Approve (or Reject) before any store applies it | Mahyar | Done |
