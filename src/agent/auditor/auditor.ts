@@ -4,7 +4,7 @@
 import { ObjectId, type Db } from 'mongodb';
 import type { ChangeBus, LedgerEntry, StoreApi, StoreId } from '../../shared/contract';
 import type { Violation } from '../guard/basis';
-import { judgeEntry } from './judge';
+import { judgeEntry, type Judgement } from './judge';
 import { summarizeIncident, type IncidentText } from './summarize';
 
 export interface IncidentDoc {
@@ -49,6 +49,8 @@ export interface AuditorDeps {
   customerTurns?: (conversationId: string) => Promise<string[]>;
   summarize?: typeof summarizeIncident;
   onIncident?: (incident: IncidentDoc) => void;
+  /** Every sale and refund judged, valid or not (the Flow scene). */
+  onJudged?: (entry: LedgerEntry, judged: Judgement) => void;
 }
 
 export type AgentMetrics = { storeId: StoreId; lostCents: number; blockedCents: number;
@@ -106,6 +108,7 @@ export function createAuditor(deps: AuditorDeps) {
     inFlight.add(entry.id);
     try {
       const judged = await judgeEntry(deps.store, entry, await priorRefunded(entry));
+      if (judged) { try { deps.onJudged?.(entry, judged); } catch { /* observer only */ } }
       if (!judged || judged.ok) return null;
 
       const [shopper, turns, currentEpoch] = await Promise.all([

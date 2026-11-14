@@ -7,6 +7,7 @@ import type { ChangeBus, StoreId } from '../../shared/contract';
 import { STORE_IDS } from '../../shared/store-data';
 import { validateVersion } from '../guard/rules';
 import { V0, type GuardrailVersion } from '../guard/types';
+import { NO_FLOW, type Flow } from '../flow-events';
 import { AGENT_STATE, ensureAgentState, loadVersion, readAgentState, ROLLOUTS, STORE_RUNTIME, type AgentStateDoc, type StateChange } from './state';
 
 export interface StoreRuntimeDoc {
@@ -38,9 +39,9 @@ interface Runtime {
   queue: Promise<void>;
 }
 
-export interface StoreRuntimesOptions { db: Db; bus: ChangeBus; pollMs?: number }
+export interface StoreRuntimesOptions { db: Db; bus: ChangeBus; pollMs?: number; flow?: Flow }
 
-export function createStoreRuntimes({ db, bus, pollMs = 3_000 }: StoreRuntimesOptions) {
+export function createStoreRuntimes({ db, bus, pollMs = 3_000, flow = NO_FLOW }: StoreRuntimesOptions) {
   const runtimes = new Map<StoreId, Runtime>(STORE_IDS.map((id) => [id, { version: V0, appliedAt: null, appliedChange: 0, online: true, catchingUp: false, queue: Promise.resolve() }]));
   let state: AgentStateDoc | null = null;
   let startedAt = 0;
@@ -77,11 +78,22 @@ export function createStoreRuntimes({ db, bus, pollMs = 3_000 }: StoreRuntimesOp
       // One row per store and change: with several processes alive (an old instance draining during a
       // deploy), the first one to apply it records the time; the others leave it alone.
       if (change >= startedAt) {
-        await db.collection<RolloutDoc>(ROLLOUTS).updateOne(
-          { storeId, version: version.version, change: catchup ? 'catchup' : doc.change, changedAt: doc.changedAt },
-          { $setOnInsert: { appliedAt, ms: appliedAt.getTime() - change, via: catchup ? 'catch-up' : via } },
+        const kind: RolloutDoc['change'] = catchup ? 'catchup' : doc.change;
+        const ms = appliedAt.getTime() - change;
+        const row = await db.collection<RolloutDoc>(ROLLOUTS).updateOne(
+          { storeId, version: version.version, change: kind, changedAt: doc.changedAt },
+          { $setOnInsert: { appliedAt, ms, via: catchup ? 'catch-up' : via } },
           { upsert: true },
-        ).catch((e) => { if ((e as { code?: number }).code !== 11000) throw e; });
+        ).catch((e) => { if ((e as { code?: number }).code !== 11000) throw e; return null; });
+        // The process that recorded the row tells the Flow scene, so two instances show it once.
+        if (row?.upsertedCount) {
+          const value = kind === 'rollback' ? `forgot in ${ms} ms (now v${version.version})`
+            : kind === 'catchup' ? `back online, caught up to v${version.version}`
+            : kind === 'reset' ? `reset to v${version.version} in ${ms} ms` : `v${version.version} in ${ms} ms`;
+          const learned = version.rules.at(-1)?.cons[0] ?? null;
+          flow.emit({ node: 'rollout', at: appliedAt, storeId, value, ms, version: version.version,
+            loop: kind === 'promote' ? learned : null, key: `rollout:${storeId}:${version.version}:${kind}:${change}` });
+        }
       }
     }).catch((error) => console.error(`${storeId}: applying version ${doc.activeVersion} failed:`, error));
     return r.queue;

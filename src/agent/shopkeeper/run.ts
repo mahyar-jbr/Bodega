@@ -7,7 +7,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { nanoid } from 'nanoid';
 import type { ChatReply, StoreApi, StoreId } from '../../shared/contract';
 import type { GuardrailVersion } from '../guard/types';
-import { runMoneyStep, type MoneyStepContext } from './money-step';
+import { runMoneyStep, type MoneyStepContext, type MoneyStepResult } from './money-step';
 import { BASE_PROMPT, REFUSAL_REPLY, storeLine, TOO_MANY_STEPS_REPLY } from './prompt';
 import { SHOPKEEPER_SETTINGS, TOOLS } from './settings';
 import { stubTurn } from './stub';
@@ -28,6 +28,9 @@ export interface RunShopkeeperInput {
   /** For a blocked call's friendly reply: the store that first saw a con the rule covers. */
   firstSeenStore?: (conIds: string[]) => StoreId | null;
   signal?: AbortSignal;
+  /** Watches each money call after it runs (the big screen's Flow scene, live chats only). It only
+   *  observes: nothing it does reaches the model, and an error in it is ignored. */
+  onMoneyStep?: (step: MoneyStepResult, startedAt: Date) => void;
 }
 
 /** One model message, exactly as the Anthropic API shapes it (thinking blocks included, unchanged). */
@@ -84,7 +87,9 @@ export async function runShopkeeper(input: RunShopkeeperInput): Promise<RunShopk
       out.reply = await modelTurn(text, input, ctx, out);
     } else {
       const catalog = await input.store.catalog(input.storeId);
+      const stepStarted = new Date();
       const turn = await stubTurn(text, catalog, ctx, `stub_${nanoid()}`);
+      if (turn.step) { try { input.onMoneyStep?.(turn.step, stepStarted); } catch { /* observer only */ } }
       out.transcript.push(...turn.tools);
       if (turn.step?.action) out.actions.push(turn.step.action);
       if (turn.step?.blocked) out.blocked.push(turn.step.blocked);
@@ -151,7 +156,9 @@ async function modelTurn(text: string, input: RunShopkeeperInput, ctx: MoneyStep
       return TOO_MANY_STEPS_REPLY;
     }
     for (const t of toolUses) {
+      const startedAt = new Date();
       const step = await runMoneyStep(t.name, t.id, t.input, ctx);
+      try { input.onMoneyStep?.(step, startedAt); } catch { /* observer only */ }
       out.transcript.push(step.entry);
       if (step.action) out.actions.push(step.action);
       if (step.blocked) out.blocked.push(step.blocked);

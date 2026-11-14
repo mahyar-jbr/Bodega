@@ -99,7 +99,8 @@ export interface AwaitingApproval {
 }
 export interface AgentApi {
   start(): Promise<void>;                                    // auditor, learner, store runtimes
-  handleMessage(input: { shopperId: string; storeId: StoreId; text: string }): Promise<ChatReply>;
+  /** via: how the message came in (the voice line passes 'voice'; typed chat may leave it out). */
+  handleMessage(input: { shopperId: string; storeId: StoreId; text: string; via?: 'chat' | 'voice' }): Promise<ChatReply>;
   state(): Promise<{ activeVersion: number; learning: boolean; learningPaused: boolean;
     stores: { storeId: StoreId; appliedVersion: number; appliedAt: Date | null; online: boolean }[];
     approvalRequired?: boolean; awaitingApproval?: AwaitingApproval | null }>;

@@ -109,7 +109,7 @@ export function createVoiceRouter({ agent, store, fetchImpl, limits = voiceLimit
     t = Date.now();
     let reply;
     try {
-      reply = await agent.handleMessage({ shopperId: shopperId.trim(), storeId, text: transcript });
+      reply = await agent.handleMessage({ shopperId: shopperId.trim(), storeId, text: transcript, via: 'voice' });
     } catch (error) {
       if (error instanceof AgentError) { res.status(STATUS[error.code]).json({ error: error.code, transcript }); return; }
       throw error;

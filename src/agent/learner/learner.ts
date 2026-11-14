@@ -16,6 +16,7 @@ import { validateVersion } from '../guard/rules';
 import type { GuardrailVersion, Rule } from '../guard/types';
 import type { ConDoc, ConMemory } from '../memory/con-memory';
 import { AGENT_STATE, loadVersion, readAgentState, saveVersion, type AgentStateDoc } from '../rollout/state';
+import { NO_FLOW, type Flow } from '../flow-events';
 import { LEARNER_SYSTEM } from './prompt';
 import { LearnedVersion, shapeProblems, toRules } from './schema';
 
@@ -55,6 +56,8 @@ export interface LearnerDeps {
   conMemory: ConMemory;
   gate: GateFn;
   delayMs?: number;
+  /** The Flow scene's events (summaries: counts, versions, gate numbers). */
+  flow?: Flow;
 }
 
 // The learner (not the shopkeeper, whose model never changes) survives an overloaded API on stage:
@@ -153,7 +156,7 @@ export async function proposeVersion(input: { active: GuardrailVersion; cons: Co
   throw new Error('unreachable');
 }
 
-export function createLearner({ db, store, conMemory, gate, delayMs = LEARN_DELAY_MS }: LearnerDeps) {
+export function createLearner({ db, store, conMemory, gate, delayMs = LEARN_DELAY_MS, flow = NO_FLOW }: LearnerDeps) {
   const runs = db.collection<LearningRunDoc>(LEARNING_RUNS);
   const state = db.collection<AgentStateDoc>(AGENT_STATE);
   let timer: NodeJS.Timeout | undefined;
@@ -232,6 +235,8 @@ export function createLearner({ db, store, conMemory, gate, delayMs = LEARN_DELA
       run = { _id: new ObjectId(), epoch: st.epoch, trigger, cons: cons.map((c) => c._id), phase: 'learning', attempts: [],
         startedAt: new Date(), finishedAt: null, error: null };
       await runs.insertOne(run);
+      const loop = cons[0]._id;
+      flow.emit({ node: 'learner', value: `started (${cons.length} new con${cons.length === 1 ? '' : 's'})`, loop });
       const knownCons = new Set([...cons.map((c) => c._id), ...active.rules.flatMap((r) => r.cons)]);
       let feedback: string | null = null;
       const call: LearnerCall = { model: learnerModel() };   // a fallback lasts for this cycle only
@@ -242,22 +247,31 @@ export function createLearner({ db, store, conMemory, gate, delayMs = LEARN_DELA
         const entry = { attempt, version: saved.version, title: saved.title, rules: saved.rules.map((r) => r.title),
           verdict: null, reasons: [], evaluationId: null, learnMs: proposal.learnMs, model: proposal.model };
         await runs.updateOne({ _id: run._id }, { $set: { phase: 'gating' }, $push: { attempts: entry } });
+        flow.emit({ node: 'learner', value: `proposed v${saved.version}: ${saved.rules.length} rule${saved.rules.length === 1 ? '' : 's'}`, version: saved.version, loop });
         // One gate at a time (the gate demo may be running): wait for it rather than fail.
         for (let i = 0; i < 90 && gateRunning() !== null; i++) await new Promise((r) => setTimeout(r, 1_000));
+        flow.emit({ node: 'gate', value: `testing v${saved.version} on held-out cases`, version: saved.version, loop });
         const result = await gate(saved.version, { attempt });
+        const c = result.candidate;
+        flow.emit({ node: 'gate', version: saved.version, loop, value: result.verdict === 'promoted'
+          ? `passed: scams ${c.scamSuccess}/${c.scamsTotal}, honest turned away ${c.honestTurnedAway}/${c.honestTotal}`
+          : `rejected: ${result.reasons[0] ?? 'worse than the active version'}` });
         await runs.updateOne({ _id: run._id, 'attempts.version': saved.version },
           { $set: { 'attempts.$.verdict': result.verdict, 'attempts.$.reasons': result.reasons, 'attempts.$.evaluationId': result.evaluationId } });
         if (result.verdict === 'promoted') {
           // With approval required, the gate's promotion is held: the version waits for a person.
           const held = (await db.collection<{ _id: number; status: string }>('guardrails').findOne({ _id: saved.version }))?.status === 'awaiting_approval';
           await runs.updateOne({ _id: run._id }, { $set: { phase: held ? 'awaiting_approval' : 'promoted', finishedAt: new Date() } });
+          flow.emit({ node: 'guardrail', value: `v${saved.version} ${held ? 'awaiting approval' : 'promoted'}`, version: saved.version, loop });
           return;
         }
         feedback = describeGate(saved.version, result);
       }
       await runs.updateOne({ _id: run._id }, { $set: { phase: 'rejected', finishedAt: new Date() } });
+      flow.emit({ node: 'learner', value: 'no version passed after 2 tries', loop: run.cons[0] ?? null });
     } catch (error) {
       console.error('learner:', error);
+      if (run) flow.emit({ node: 'learner', value: 'failed: an error, not a verdict', loop: run.cons[0] ?? null });
       // An error (an overloaded API, a busy gate), not a verdict: these cons may be tried once more.
       for (const c of cons) {
         const tries = (errorTries.get(c._id) ?? 0) + 1;

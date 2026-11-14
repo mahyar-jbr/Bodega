@@ -9,7 +9,8 @@ import { atlasConversations, conversationIdFor, type ConversationLog } from './c
 import { V0 } from './guard/types';
 import { gate, gateDemo, runEvaluation } from './gate/gate';
 import { createLearner, LEARNING_RUNS, type Learner } from './learner/learner';
-import { createConMemory, type ConMemory } from './memory/con-memory';
+import { createConMemory, type ConDoc, type ConMemory } from './memory/con-memory';
+import { createFlow, emitMoneyStep, ensureFlowEvents, NO_FLOW, watchFlowBus, type Flow } from './flow-events';
 import { forgetShopper } from './memory/forget';
 import { ensureMemoryRules } from './memory/memory-rules';
 import { proveMemoryRules } from './memory-proof';
@@ -26,6 +27,13 @@ export const LIMITS = Object.freeze({
   minIntervalMs: 2_000,      // one message every 2 seconds per shopper
   maxMessages: 40,           // per shopper, in total
 });
+
+/** How the con memory filed an incident, for the Flow scene. */
+export function memoryOutcome(con: ConDoc): { value: string; score: number | null } {
+  if (con.incidents <= 1) return { value: con.grouping === 'violation' ? 'new con (grouped by violation)' : 'new con', score: null };
+  if (con.grouping === 'agent-memory' && con.matchScore != null) return { value: `matched ${con.matchScore.toFixed(2)}`, score: con.matchScore };
+  return { value: 'grouped by violation', score: null };
+}
 
 export interface AgentOptions {
   conversations?: ConversationLog;
@@ -44,6 +52,8 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
   let runtimes: StoreRuntimes | null = null;
   let conMemory: ConMemory | null = null;
   let learner: Learner | null = null;
+  // The Flow scene's events (flow_events): written once the agent has started, never by evaluations.
+  let flow: Flow = NO_FLOW;
   const offlineBeforeStart = new Set<StoreId>();
 
   function requireRuntimes(): StoreRuntimes {
@@ -73,17 +83,29 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
 
   async function startOnce(): Promise<void> {
       await ensureMemoryRules(deps.db);
-      runtimes ??= createStoreRuntimes({ db: deps.db, bus: deps.bus });
+      await ensureFlowEvents(deps.db);
+      const liveFlow = createFlow({ db: deps.db, epoch: () => runtimes?.agentState()?.epoch ?? 0 });
+      runtimes ??= createStoreRuntimes({ db: deps.db, bus: deps.bus, flow: liveFlow });
       await runtimes.start();
       // The learner starts 10 s after the first new con the active version doesn't cover.
       conMemory ??= createConMemory({ db: deps.db, onNewCon: (con) => learner?.onNewCon(con) });
       await conMemory.start();
       const memory = conMemory;
-      learner ??= createLearner({ db: deps.db, store, conMemory: memory, gate: (n, opts) => gate({ db: deps.db }, n, opts) });
+      learner ??= createLearner({ db: deps.db, store, conMemory: memory, gate: (n, opts) => gate({ db: deps.db }, n, opts), flow: liveFlow });
       await learner.start();
       auditor ??= createAuditor({ db: deps.db, store, bus: deps.bus,
-        onIncident: (incident) => { memory.assign(incident).catch((e) => console.error('con memory: assign failed:', e)); } });
+        onJudged: (entry, judged) => liveFlow.emit({ node: 'auditor', storeId: entry.storeId, ref: entry.id, key: `audit:${entry.id}`,
+          value: judged.ok ? `valid ${judged.kind}` : `no valid basis: ${judged.violations[0] ?? 'unknown'}`, cents: judged.ok ? null : judged.lossCents }),
+        onIncident: (incident) => {
+          liveFlow.emit({ node: 'incident', storeId: incident.storeId, value: incident.title, cents: incident.lossCents,
+            ref: incident.ledgerId, key: `incident:${incident._id.toHexString()}` });
+          memory.assign(incident).then((con) => liveFlow.emit({ node: 'memory', storeId: incident.storeId, loop: con._id,
+            ref: incident.ledgerId, key: `memory:${incident._id.toHexString()}`, ...memoryOutcome(con) }))
+            .catch((e) => console.error('con memory: assign failed:', e));
+        } });
       await auditor.start();
+      watchFlowBus(deps.bus, liveFlow);
+      flow = liveFlow;
   }
 
   const api: AgentApi = {
@@ -94,7 +116,7 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
       return starting;
     },
 
-    async handleMessage({ shopperId, storeId, text }) {
+    async handleMessage({ shopperId, storeId, text, via = 'chat' }) {
       if (typeof text !== 'string' || text.trim().length === 0) throw new AgentError('too_long', 'Say something first!');
       if (text.length > LIMITS.maxChars) throw new AgentError('too_long', `Messages are at most ${LIMITS.maxChars} characters.`);
       if (!STORE_IDS.includes(storeId)) throw new AgentError('unknown_shopper', 'Unknown store.');
@@ -110,6 +132,7 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
       sent.set(shopperId, { last: t, count: s.count + 1 });
 
       return serial(shopperId, async () => {
+        flow.emit({ node: 'shopper', storeId, value: `${shopper.nickname} · ${via === 'voice' ? 'voice' : 'chat'}` });
         const conversationId = conversationIdFor(shopperId);
         const history = await conversations.load(conversationId);
         let result;
@@ -118,7 +141,8 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
         if (version.rules.length) await conMemory?.ensureFirstSeen(version.rules.flatMap((r) => r.cons)).catch(() => {});
         try {
           result = await runShopkeeper({ store, storeId, shopperId, turns: [text], version, history, conversationId,
-            firstSeenStore: (conIds) => conMemory?.firstSeenStore(conIds) ?? null });
+            firstSeenStore: (conIds) => conMemory?.firstSeenStore(conIds) ?? null,
+            onMoneyStep: (step, startedAt) => emitMoneyStep(flow, step, startedAt, { storeId, version }) });
         } catch (error) {
           if (error instanceof Anthropic.APIError) {
             console.error(`shopkeeper call failed (${error.status ?? 'network'}): ${error.message}`);
@@ -126,6 +150,7 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
           }
           throw error;
         }
+        flow.emit({ node: 'shopkeeper', storeId, value: 'replied', version: version.version });
         await conversations.append({ conversationId, shopperId, storeId, messages: result.messages.slice(history.length), at: new Date() });
         for (const b of result.blocked) {
           if (b.cents > 0) {
@@ -182,6 +207,7 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
       // Every store hears about it from the change bus (the slow poll is the safety net) and records
       // its time to forget.
       const { fromVersion, toVersion } = await rollbackActive(deps.db);
+      flow.emit({ node: 'rollback', value: `v${fromVersion} to v${toVersion}`, version: toVersion });
       return { fromVersion, toVersion };
     },
     async reset() {
@@ -202,6 +228,7 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
       requireRuntimes();
       const r = await approveAwaiting(deps.db);
       if (r.approved) {
+        flow.emit({ node: 'guardrail', value: `v${r.version} approved and promoted`, version: r.version ?? null });
         await deps.db.collection(LEARNING_RUNS).updateMany({ phase: 'awaiting_approval', 'attempts.version': r.version },
           { $set: { phase: 'promoted', approvedAt: new Date() } });
       }
@@ -212,6 +239,7 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
       requireRuntimes();
       const r = await rejectAwaiting(deps.db, reason);
       if (r.rejected) {
+        flow.emit({ node: 'guardrail', value: `v${r.version} rejected by an operator`, version: r.version ?? null });
         await deps.db.collection(LEARNING_RUNS).updateMany({ phase: 'awaiting_approval', 'attempts.version': r.version },
           { $set: { phase: 'rejected_by_operator', rejectedAt: new Date() } });
       }
