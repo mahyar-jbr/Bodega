@@ -223,7 +223,7 @@
 .shop-header-status strong .bd-icon { color: var(--ink-3); }
 
 .shop-policy {
-  grid-column: 1 / -1;
+  grid-column: 2;
   grid-row: 2;
   justify-self: end;
   white-space: nowrap;
@@ -515,10 +515,8 @@
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 12%, transparent);
 }
 .shop-mic-button:focus-visible,
-.shop-voice-status button:focus-visible,
-.shop-voice-replay:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
-.shop-voice-status,
-.shop-voice-replay {
+.shop-voice-status button:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+.shop-voice-status {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -544,8 +542,26 @@
   max-width: 100%;
   border-radius: var(--radius-md);
 }
-.shop-voice-replay { position: absolute; right: 16px; bottom: calc(100% + 8px); }
 .shop-voice-status button { flex-shrink: 0; }
+.shop-speaker-toggle,
+.shop-reply-audio {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--control-edge);
+  border-radius: var(--radius-pill);
+  color: var(--ink-2);
+  background: var(--glass-sheen);
+  font-size: var(--ui-caption-font-size);
+}
+.shop-speaker-toggle { grid-column: 1; grid-row: 2; justify-self: start; }
+.shop-speaker-toggle[aria-pressed="true"] { color: var(--brand-ink); }
+.shop-reply-audio { margin-top: 10px; }
+.shop-reply-audio:hover,
+.shop-speaker-toggle:hover { background: var(--glass-sheen-strong); }
 .shop-listening-cue { display: flex; align-items: center; justify-content: flex-end; gap: 5px; margin-top: 7px; color: var(--ink-3); font-size: var(--ui-micro-font-size); }
 .shop-listening-cue i { width: 6px; height: 6px; border-radius: 50%; background: var(--brand); animation: shop-typing var(--dur-loop) ease-in-out infinite; }
 .shop-voice-wave { display: inline-block; margin-left: 10px; vertical-align: middle; color: var(--ink-3); }

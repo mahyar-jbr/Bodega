@@ -10,6 +10,9 @@ import { ensureShopper, readTranscript, saveLocalShopper, saveTranscript, type L
 import { displayReply, policyLabel, policySnapshot, type PolicyState } from './presentation';
 import { VoiceButton } from './VoiceButton';
 import { VoiceTranscriptBubble, type VoiceDraft } from './VoiceTranscriptBubble';
+import { ReplyAudioControl, SpeakerToggle } from './ReplyAudioControls';
+import { useReplyAudio } from './useReplyAudio';
+import type { ReplyAudioState } from './reply-audio';
 import { friendlyVoiceError, type VoicePhase } from './voice';
 import '../ui/theme.css';
 import './shop.css';
@@ -104,6 +107,7 @@ export default function ShopPage() {
   const [voicePreview, setVoicePreview] = useState<VoiceDraft | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const policyRef = useRef<PolicyState | null>(null);
+  const spokenReplies = useReplyAudio(`${store ?? 'unknown'}:${slot ?? ''}`);
 
   useEffect(() => {
     if (!store) return;
@@ -229,6 +233,7 @@ export default function ShopPage() {
   }
 
   function acceptReply(reply: ChatReply, transcript?: string) {
+    const id = makeId();
     setShopper((current) => {
       if (!current) return current;
       const next = { ...current, walletCents: reply.walletCents };
@@ -237,9 +242,10 @@ export default function ShopPage() {
     });
     setMessages((current) => [...current,
       ...(transcript ? [{ id: makeId(), from: 'customer' as const, text: transcript, time: currentTime(), quiet: true }] : []),
-      { id: makeId(), from: 'shopkeeper', text: reply.reply, actions: reply.actions,
+      { id, from: 'shopkeeper', text: reply.reply, actions: reply.actions,
         blocked: reply.blocked, policyVersion: policy.version, time: currentTime() },
     ]);
+    return id;
   }
 
   function voiceError(error: unknown, transcript?: string) {
@@ -297,10 +303,12 @@ export default function ShopPage() {
         <JoinScreen store={store} shopper={shopper} onStart={startShopping} />
       ) : (
         <div className="shop-chat-layout">
-          <ShopHeader store={store} walletCents={shopper.walletCents} policy={policy} />
+          <ShopHeader store={store} walletCents={shopper.walletCents} policy={policy}
+            speakerOn={spokenReplies.enabled} onToggleSpeaker={spokenReplies.toggle} />
           <section className="shop-chat" aria-label={`Chat with the ${design.name} shopkeeper`} aria-live="polite">
             <div className="shop-chat-spacer" />
-            {messages.map((message) => <ChatMessage key={message.id} message={message} store={store} nickname={shopper.nickname} />)}
+            {messages.map((message) => <ChatMessage key={message.id} message={message} store={store} nickname={shopper.nickname}
+              audioState={spokenReplies.states[message.id]} onPlay={() => spokenReplies.play(message.id)} onStop={spokenReplies.stop} />)}
             {voicePreview && <VoiceTranscriptBubble draft={voicePreview} />}
             {(sending || voicePhase === 'sending') && <TypingIndicator store={store} />}
             <div ref={chatEndRef} />
@@ -326,7 +334,8 @@ export default function ShopPage() {
                 <span className="shop-character-count bd-num">{draft.length}/{MAX_MESSAGE_LENGTH}</span>
               </div>
               <VoiceButton key={shopper.id} shopperId={shopper.id} storeId={store} disabled={sending}
-                onPhase={setVoicePhase} onPreview={setVoicePreview} onReply={({ reply, transcript }) => acceptReply(reply, transcript)} onError={voiceError} />
+                onPhase={setVoicePhase} onPreview={setVoicePreview} onRecordGesture={spokenReplies.beginRecordingGesture}
+                onReply={(voice) => spokenReplies.receive(acceptReply(voice.reply, voice.transcript), voice)} onError={voiceError} />
               <button className="shop-send-button" type="submit" aria-label="Send message" disabled={sending || voicePhase !== 'idle' || !draft.trim()}>
                 <Icon name="arrow-up" size={24} />
               </button>
@@ -388,7 +397,9 @@ function JoinDetail({ icon, title, children }: { icon: 'coins' | 'tag' | 'mask';
   );
 }
 
-function ShopHeader({ store, walletCents, policy }: { store: StoreKey; walletCents: number; policy: PolicyState }) {
+function ShopHeader({ store, walletCents, policy, speakerOn, onToggleSpeaker }: {
+  store: StoreKey; walletCents: number; policy: PolicyState; speakerOn: boolean; onToggleSpeaker: () => void;
+}) {
   const design = STORES[store];
   return (
     <header className="shop-header">
@@ -403,11 +414,14 @@ function ShopHeader({ store, walletCents, policy }: { store: StoreKey; walletCen
         <strong className="bd-num"><Icon name="coins" size={18} />{formatMoney(walletCents)}</strong>
         <span className="shop-policy"><Icon name="shield" size={16} />{policyLabel(policy)}</span>
       </div>
+      <SpeakerToggle enabled={speakerOn} onToggle={onToggleSpeaker} />
     </header>
   );
 }
 
-function ChatMessage({ message, store, nickname }: { message: Message; store: StoreKey; nickname: string }) {
+function ChatMessage({ message, store, nickname, audioState, onPlay, onStop }: {
+  message: Message; store: StoreKey; nickname: string; audioState?: ReplyAudioState; onPlay: () => void; onStop: () => void;
+}) {
   if (message.from === 'system') {
     return <p className={`shop-system-message${message.error ? ' is-error' : ''}`}><Icon name={message.error ? 'alert' : 'shield'} size={16} />{message.text}</p>;
   }
@@ -424,6 +438,7 @@ function ChatMessage({ message, store, nickname }: { message: Message; store: St
         {message.blocked?.map((blocked) => (
           <BlockedCard key={blocked.ruleId} blocked={blocked} policyVersion={message.policyVersion ?? 0} />
         ))}
+        <ReplyAudioControl state={audioState} onPlay={onPlay} onStop={onStop} />
         <time>{message.time}</time>
       </div>
     </article>

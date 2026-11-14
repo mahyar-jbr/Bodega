@@ -12,30 +12,18 @@ interface Props {
   onReply: (reply: VoiceReply) => void;
   onError: (error: unknown, transcript?: string) => void;
   onPreview: (draft: VoiceDraft | null) => void;
+  onRecordGesture: () => void;
 }
 
 export function VoiceButton(props: Props) {
   const [available, setAvailable] = useState(false);
   const [phase, setPhase] = useState<VoicePhase>('idle');
-  const [replay, setReplay] = useState(false);
   const liveText = useRef<string | null>(null);
   const released = useRef(false);
   const latest = useRef(props);
   latest.current = props;
   const recorder = useRef<VoiceRecorder | null>(null);
-  const audio = useRef<HTMLAudioElement | null>(null);
   const press = useRef<{ at: number; started: boolean } | null>(null);
-
-  function stopPlayback() { audio.current?.pause(); audio.current = null; setReplay(false); }
-  function playReply(reply: VoiceReply) {
-    stopPlayback();
-    if (!reply.audio || !reply.audioType) return;
-    const player = new Audio(`data:${reply.audioType};base64,${reply.audio}`);
-    audio.current = player;
-    player.onended = () => { if (audio.current === player) setReplay(false); };
-    if (document.hidden) { setReplay(true); return; }
-    void player.play().catch(() => { if (audio.current === player) setReplay(true); });
-  }
 
   useEffect(() => {
     if (!canRecordVoice()) return;
@@ -50,7 +38,7 @@ export function VoiceButton(props: Props) {
         if (next === 'recording') latest.current.onPreview({ text: liveText.current, released: false });
       } },
       onRelease: () => { if (current) { released.current = true; latest.current.onPreview({ text: liveText.current, released: true }); } },
-      onReply: (reply) => { if (current) { latest.current.onPreview(null); latest.current.onReply(reply); playReply(reply); } },
+      onReply: (reply) => { if (current) { latest.current.onPreview(null); latest.current.onReply(reply); } },
       onError: (error, transcript) => { if (current) { latest.current.onPreview(null); latest.current.onError(error, transcript); } },
       onUnavailable: () => { if (current) setAvailable(false); },
       createLivePreview: () => createLiveTranscript({ shopperId: props.shopperId, onText: (text) => { if (current) {
@@ -62,7 +50,6 @@ export function VoiceButton(props: Props) {
     const onHidden = () => {
       if (document.hidden) {
         if (control.phase !== 'sending') control.cancel();
-        stopPlayback();
       }
     };
     document.addEventListener('visibilitychange', onHidden);
@@ -71,15 +58,16 @@ export function VoiceButton(props: Props) {
       probe.abort();
       control.cancel();
       recorder.current = null;
-      audio.current?.pause();
-      audio.current = null;
       document.removeEventListener('visibilitychange', onHidden);
     };
   }, [props.shopperId, props.storeId]);
 
   function toggle() {
     if (phase === 'recording' || phase === 'requesting') recorder.current?.stop();
-    else if (phase === 'idle' && !props.disabled) { stopPlayback(); void recorder.current?.start(); }
+    else if (phase === 'idle' && !props.disabled) {
+      props.onRecordGesture();
+      void recorder.current?.start();
+    }
   }
 
   if (!available) return null;
@@ -115,8 +103,5 @@ export function VoiceButton(props: Props) {
       <span>{phase === 'requesting' ? 'Allow microphone access…' : 'Listening…'}</span>
       <button type="button" onClick={() => recorder.current?.cancel()}>Cancel</button>
     </div>}
-    {replay && <button type="button" className="shop-voice-replay" onClick={() => {
-      void audio.current?.play().then(() => setReplay(false)).catch(() => setReplay(true));
-    }}>Play spoken reply</button>}
   </div>;
 }
