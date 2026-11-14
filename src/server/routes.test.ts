@@ -5,6 +5,7 @@ import type { Db } from 'mongodb';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentError, type AgentApi, type Shopper, type StoreApi } from '../shared/contract';
 import { createApiRouter, type OpsAutomation } from './routes';
+import type { FlashSaleResult } from '../bots/flash';
 
 const shopper: Shopper = {
   id: 'shopper-1',
@@ -53,6 +54,7 @@ const stores = [
 const db = {
   collection: vi.fn(() => ({
     find: vi.fn(() => ({ toArray: vi.fn(async () => [...stores]) })),
+    findOne: vi.fn(async () => null),
   })),
 } as unknown as Db;
 
@@ -63,6 +65,7 @@ const opsAutomation = {
   status: vi.fn(() => ({ running: true, runId: 'crowd-1', storeId: 'yonge' as const, active: 2 })),
 } satisfies OpsAutomation;
 const resetData = vi.fn(async () => ({ shoppersDeleted: 1 }));
+const flash = { runFlashSale: vi.fn<({ storeId }: { storeId?: 'queen' | 'yonge' | 'scarborough' }) => Promise<FlashSaleResult>>() };
 
 let server: Server;
 let base: string;
@@ -70,7 +73,7 @@ let base: string;
 beforeAll(async () => {
   const app = express();
   app.use(express.json());
-  app.use('/api', createApiRouter({ store, agent, db, opsAutomation, resetData }));
+  app.use('/api', createApiRouter({ store, agent, db, opsAutomation, flash, resetData }));
   app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     void error;
     res.status(500).json({ error: 'internal' });
@@ -149,6 +152,9 @@ describe('password-protected ops routes', () => {
     expect((await request('/api/ops/reset', { method: 'POST' })).status).toBe(401);
     expect((await request('/api/ops/reset', { method: 'POST', headers: { 'x-ops-password': 'wrong' } })).status).toBe(401);
     expect((await request('/api/ops/crowd/status')).status).toBe(401);
+    expect((await request('/api/ops/flash', { method: 'POST' })).status).toBe(401);
+    expect((await request('/api/ops/flash')).status).toBe(401);
+    expect((await request('/api/ops/store/queen/online', { method: 'POST' })).status).toBe(401);
   });
 
   it('reads the running crowd without starting a model run', async () => {
@@ -181,5 +187,45 @@ describe('password-protected ops routes', () => {
     expect(opsAutomation.opening).toHaveBeenCalledWith('queen');
     expect(opsAutomation.startCrowd).toHaveBeenCalledWith('yonge');
     expect(opsAutomation.stopCrowd).toHaveBeenCalledOnce();
+  });
+
+  it('accepts a long flash run immediately, defaults to Queen, and prevents duplicate starts/reset', async () => {
+    let finish!: (result: FlashSaleResult) => void;
+    flash.runFlashSale.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const started = await opsPost('/api/ops/flash');
+    expect(started.status).toBe(202);
+    await expect(started.json()).resolves.toMatchObject({ kind: 'flash', storeId: 'queen', status: 'running' });
+    expect(flash.runFlashSale).toHaveBeenCalledWith({ storeId: 'queen' });
+    expect((await opsPost('/api/ops/flash', { storeId: 'queen' })).status).toBe(409);
+    expect((await opsPost('/api/ops/reset')).status).toBe(409);
+    expect(resetData).not.toHaveBeenCalled();
+    const pending = await request('/api/ops/flash?storeId=queen', { headers: { 'x-ops-password': 'test-password' } });
+    expect((await pending.json()).run.status).toBe('running');
+    finish({ kind: 'flash', storeId: 'queen', status: 'done', succeeded: 10, failed: 90, passed: true, shopperIds: [] } as unknown as FlashSaleResult);
+    const completed = await request('/api/ops/flash?storeId=queen', { headers: { 'x-ops-password': 'test-password' } });
+    expect((await completed.json()).run).toMatchObject({ status: 'done', succeeded: 10, failed: 90, passed: true });
+  });
+
+  it('validates flash input before starting any work', async () => {
+    expect((await opsPost('/api/ops/flash', { storeId: 'unknown' })).status).toBe(400);
+    expect((await opsPost('/api/ops/flash', { storeId: 'queen', count: 1000 })).status).toBe(400);
+    expect(flash.runFlashSale).not.toHaveBeenCalled();
+  });
+
+  it('sets a store online/offline and returns its current runtime entry', async () => {
+    const offline = { storeId: 'yonge' as const, appliedVersion: 1, appliedAt: new Date(), online: false };
+    agent.state.mockResolvedValueOnce({ activeVersion: 2, learning: false, learningPaused: false, stores: [offline] });
+    const response = await opsPost('/api/ops/store/yonge/online', { online: false });
+    expect(response.status).toBe(200);
+    expect(agent.setStoreOnline).toHaveBeenCalledWith('yonge', false);
+    expect(await response.json()).toMatchObject({ storeId: 'yonge', appliedVersion: 1, online: false });
+    expect((await opsPost('/api/ops/store/yonge/online', { online: true })).status).toBe(200);
+    expect(agent.setStoreOnline).toHaveBeenLastCalledWith('yonge', true);
+  });
+
+  it('rejects an unknown store and non-boolean online values', async () => {
+    expect((await opsPost('/api/ops/store/unknown/online', { online: false })).status).toBe(400);
+    expect((await opsPost('/api/ops/store/queen/online', { online: 'false' })).status).toBe(400);
+    expect(agent.setStoreOnline).not.toHaveBeenCalled();
   });
 });

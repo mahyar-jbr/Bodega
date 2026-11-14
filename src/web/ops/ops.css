@@ -304,6 +304,50 @@
 .ops-store-state.is-good { color: var(--immune); }
 .ops-store-state.is-warning { color: var(--learning); }
 .ops-store-state.is-offline { color: var(--loss); }
+.ops-store-controls { justify-items: end; gap: 5px; padding-block: 10px; }
+.ops-store-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 87px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--glass-sheen);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--ui-micro-font-size);
+}
+.ops-store-toggle i { width: 7px; height: 7px; border-radius: 50%; background: var(--loss); }
+.ops-store-toggle[aria-checked="true"] i { background: var(--immune); }
+.ops-store-toggle:disabled { opacity: .45; cursor: not-allowed; }
+
+.ops-flash-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.ops-flash-controls label { color: var(--ink-3); font-size: var(--ui-caption-font-size); }
+.ops-flash-controls select {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--control-edge);
+  border-radius: var(--radius-pill);
+  background: var(--slate-800);
+  color: var(--ink);
+  font: inherit;
+}
+.ops-flash-controls .ops-button { flex: 1; }
+.ops-flash-result { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 14px; }
+.ops-flash-verdict { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: var(--ui-caption-font-size); }
+.ops-flash-verdict time { margin-left: auto; color: var(--ink-3); white-space: nowrap; }
+.ops-flash .is-good { color: var(--immune); }
+.ops-flash .is-warning { color: var(--learning); }
+.ops-flash .is-bad, .ops-flash-error { color: var(--loss); }
+.ops-flash-numbers { display: grid; margin: 14px 0; font-size: var(--ui-caption-font-size); }
+.ops-flash-numbers div, .ops-integrity-checks li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.ops-flash-numbers dt, .ops-integrity-checks span { color: var(--ink-2); }
+.ops-flash-numbers dd { margin: 0; font-weight: 550; }
+.ops-integrity-checks { list-style: none; padding: 0; margin: 12px 0 0; font-size: var(--ui-micro-font-size); }
+.ops-integrity-checks strong { white-space: nowrap; font-weight: 550; }
 
 .ops-last-bot { display: flex; gap: 11px; }
 .ops-last-bot > .bd-icon { color: var(--ink-3); }

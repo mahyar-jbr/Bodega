@@ -2,8 +2,10 @@ import { timingSafeEqual } from 'node:crypto';
 import { Router, type RequestHandler, type Response } from 'express';
 import type { Db } from 'mongodb';
 import { z } from 'zod';
+import type { FlashSale } from '../bots/flash';
 import { AgentError, type AgentApi, type StoreApi, type StoreId } from '../shared/contract';
 import { resetStoreData } from '../store/reset';
+import { createFlashJobs } from './flash-jobs';
 
 const storeIdSchema = z.enum(['queen', 'yonge', 'scarborough']);
 const shopperSchema = z.object({ storeId: storeIdSchema }).strict();
@@ -18,6 +20,7 @@ const evalSchema = z.object({
 }).strict();
 const optionalStoreSchema = z.object({ storeId: storeIdSchema.optional() }).strict();
 const storeSchema = z.object({ storeId: storeIdSchema }).strict();
+const onlineSchema = z.object({ online: z.boolean() }).strict();
 
 const STORE_ORDER: StoreId[] = ['queen', 'yonge', 'scarborough'];
 const AGENT_ERROR_STATUS: Record<AgentError['code'], number> = {
@@ -47,12 +50,14 @@ export interface RouteDeps {
   agent: AgentApi;
   db: Db;
   opsAutomation?: OpsAutomation;
+  flash?: FlashSale;
   resetData?: () => Promise<unknown>;
 }
 
-export function createApiRouter({ store, agent, db, opsAutomation, resetData }: RouteDeps): Router {
+export function createApiRouter({ store, agent, db, opsAutomation, flash, resetData }: RouteDeps): Router {
   const router = Router();
   const resetDataStore = resetData ?? (() => resetStoreData(db));
+  const flashJobs = flash ? createFlashJobs(flash, db) : null;
 
   router.post('/shoppers', async (req, res) => {
     const input = shopperSchema.safeParse(req.body);
@@ -95,8 +100,10 @@ export function createApiRouter({ store, agent, db, opsAutomation, resetData }: 
   router.use('/ops', requireOpsPassword);
 
   router.post('/ops/reset', async (_req, res) => {
+    if (flashJobs?.running()) return res.status(409).json({ error: 'flash_busy' });
     await resetDataStore();
     sendResult(res, await agent.reset());
+    flashJobs?.clear();
   });
 
   router.post('/ops/learn-now', async (_req, res) => {
@@ -139,6 +146,32 @@ export function createApiRouter({ store, agent, db, opsAutomation, resetData }: 
   router.get('/ops/crowd/status', (_req, res) => {
     if (!opsAutomation) return unavailable(res);
     sendResult(res, opsAutomation.status());
+  });
+
+  router.post('/ops/flash', (req, res) => {
+    const input = optionalStoreSchema.safeParse(req.body ?? {});
+    if (!input.success) return invalid(res);
+    if (!flashJobs) return unavailable(res);
+    const storeId = input.data.storeId ?? 'queen';
+    if (flashJobs.running(storeId)) return res.status(409).json({ error: 'flash_busy' });
+    res.status(202).json(flashJobs.start(storeId));
+  });
+
+  router.get('/ops/flash', async (req, res) => {
+    const input = optionalStoreSchema.safeParse(req.query);
+    if (!input.success) return invalid(res);
+    if (!flashJobs) return unavailable(res);
+    res.json({ run: await flashJobs.status(input.data.storeId ?? 'queen') });
+  });
+
+  router.post('/ops/store/:storeId/online', async (req, res) => {
+    const storeId = storeIdSchema.safeParse(req.params.storeId);
+    const input = onlineSchema.safeParse(req.body);
+    if (!storeId.success || !input.success) return invalid(res);
+    await agent.setStoreOnline(storeId.data, input.data.online);
+    const updated = (await agent.state()).stores.find((entry) => entry.storeId === storeId.data);
+    if (!updated) return unavailable(res);
+    res.json(updated);
   });
 
   return router;

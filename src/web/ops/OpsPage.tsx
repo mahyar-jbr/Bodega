@@ -5,6 +5,7 @@ import { AwningMark } from '../ui/AwningMark';
 import { Icon, type IconName } from '../ui/Icon';
 import { Logo } from '../ui/Logo';
 import { isStoreKey, STORES, STORE_KEYS, type StoreKey } from '../ui/stores';
+import { FlashSalePanel, latestFlashRun, type FlashRunView } from './FlashSalePanel';
 import '../ui/theme.css';
 import './ops.css';
 
@@ -18,6 +19,7 @@ const OPS_ENDPOINTS = {
   crowdStart: '/api/ops/crowd/start',
   crowdStop: '/api/ops/crowd/stop',
   crowdStatus: '/api/ops/crowd/status',
+  flash: '/api/ops/flash',
 } as const;
 
 type AgentState = Awaited<ReturnType<AgentApi['state']>>;
@@ -36,6 +38,8 @@ type BotResult = {
   storeId?: StoreKey;
   summary?: string;
   completed?: number;
+  succeeded?: number;
+  finished?: number;
   failed?: number;
 };
 
@@ -83,6 +87,7 @@ function describeResult(value: unknown, fallback: string) {
   if (!value || typeof value !== 'object') return fallback;
   const result = value as Record<string, unknown>;
   if (typeof result.reason === 'string') return result.reason;
+  if (result.kind === 'flash' && result.status === 'running') return 'Flash sale running. Results will appear automatically.';
   if (typeof result.evaluationId === 'string') return `Evaluation ${result.evaluationId} started`;
   if (typeof result.fromVersion === 'number' && typeof result.toVersion === 'number') {
     return `Policy v${result.fromVersion} rolled back to v${result.toVersion}`;
@@ -102,12 +107,20 @@ export default function OpsPage() {
   const [notice, setNotice] = useState('Ready for the opening.');
   const [crowdRunning, setCrowdRunning] = useState(false);
   const [lastBot, setLastBot] = useState<BotResult | null>(null);
+  const [flashStore, setFlashStore] = useState<StoreKey>('queen');
+  const [flashRuns, setFlashRuns] = useState<Partial<Record<StoreKey, FlashRunView>>>({});
+  const flashRunning = Object.values(flashRuns).filter((run) => run?.status === 'running').length;
   const [log, setLog] = useState<LogLine[]>([
     { id: makeId(), time: clockTime(), text: 'Ops console ready', tone: 'quiet' },
   ]);
 
   const addLog = useCallback((text: string, tone: LogLine['tone'] = 'quiet') => {
     setLog((current) => [...current.slice(-39), { id: makeId(), time: clockTime(), text, tone }]);
+  }, []);
+
+  const applyFlash = useCallback((run: FlashRunView) => {
+    if (run.kind !== 'flash' || !isStoreKey(run.storeId)) return;
+    setFlashRuns((current) => ({ ...current, [run.storeId]: latestFlashRun(current[run.storeId], run) }));
   }, []);
 
   const refreshOverview = useCallback(async () => {
@@ -146,6 +159,22 @@ export default function OpsPage() {
 
   useEffect(() => {
     if (!unlocked) return;
+    let cancelled = false;
+    const refreshFlash = async () => {
+      await Promise.allSettled(STORE_KEYS.map(async (storeId) => {
+        const { run } = await apiJson<{ run: FlashRunView | null }>(`${OPS_ENDPOINTS.flash}?storeId=${storeId}`, {
+          headers: { 'x-ops-password': password },
+        });
+        if (!cancelled && run) applyFlash(run);
+      }));
+    };
+    void refreshFlash();
+    const timer = window.setInterval(() => void refreshFlash(), 5_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [applyFlash, password, unlocked]);
+
+  useEffect(() => {
+    if (!unlocked) return;
     const events = new EventSource('/api/events?topics=ops');
     events.onmessage = ({ data }) => {
       try {
@@ -153,6 +182,7 @@ export default function OpsPage() {
         if (event.coll === 'settings') void refreshOverview();
         if (event.coll === 'bot_runs' && event.doc && typeof event.doc === 'object') {
           const doc = event.doc as BotResult;
+          if (doc.kind === 'flash') applyFlash(event.doc as FlashRunView);
           setLastBot(doc);
           const kind = doc.kind ?? 'Bot';
           const status = doc.status ?? String(event.op ?? 'updated');
@@ -163,7 +193,7 @@ export default function OpsPage() {
       }
     };
     return () => events.close();
-  }, [addLog, refreshOverview, unlocked]);
+  }, [addLog, applyFlash, refreshOverview, unlocked]);
 
   function unlock(event: FormEvent) {
     event.preventDefault();
@@ -203,8 +233,11 @@ export default function OpsPage() {
         setNotice('Password rejected.');
         addLog('Password rejected', 'bad');
       } else {
-        setNotice(`${label} failed. Try again.`);
-        addLog(`${label} failed`, 'bad');
+        const message = error instanceof ApiError && error.code === 'flash_busy'
+          ? 'A flash sale is already running. Wait for its result.'
+          : `${label} failed. Try again.`;
+        setNotice(message);
+        addLog(message, 'bad');
       }
     } finally {
       setBusy(null);
@@ -279,8 +312,8 @@ export default function OpsPage() {
           <ConsolePanel title="Reset demo" aside="Hold for 1.5 seconds">
             <p className="ops-panel-copy">Clears shoppers, orders, ledger and bot runs, restocks every store and returns the agent to v0.</p>
             <HoldButton
-              disabled={busy !== null}
-              onComplete={() => void runAction('reset', 'Reset demo', OPS_ENDPOINTS.reset)}
+              disabled={busy !== null || flashRunning > 0}
+              onComplete={() => void runAction('reset', 'Reset demo', OPS_ENDPOINTS.reset, undefined, () => setFlashRuns({}))}
             />
           </ConsolePanel>
         </aside>
@@ -380,6 +413,16 @@ export default function OpsPage() {
               ><Icon name="pause" size={18} />Stop</button>
             </div>
           </ConsolePanel>
+
+          <ConsolePanel title="Flash sale" aside={STORES[flashStore].name}>
+            <FlashSalePanel
+              store={flashStore}
+              run={flashRuns[flashStore]}
+              disabled={busy !== null || flashRunning > 0}
+              onStoreChange={setFlashStore}
+              onStart={() => void runAction('flash', 'Flash sale', OPS_ENDPOINTS.flash, { storeId: flashStore }, (result) => applyFlash(result as FlashRunView))}
+            />
+          </ConsolePanel>
         </section>
 
         <aside className="ops-column">
@@ -387,12 +430,19 @@ export default function OpsPage() {
             <div className="ops-store-list">
               {STORE_KEYS.map((store) => {
                 const live = state.stores.find((item) => item.storeId === store);
-                return <StoreRow key={store} store={store} state={live} activeVersion={state.activeVersion} />;
+                return <StoreRow
+                  key={store} store={store} state={live} activeVersion={state.activeVersion}
+                  disabled={busy !== null}
+                  onToggle={() => void runAction(`online-${store}`, `${STORES[store].name} ${live?.online ? 'offline' : 'online'}`, `/api/ops/store/${store}/online`, { online: !live?.online }, (result) => {
+                    const updated = result as StoreState;
+                    setState((current) => ({ ...current, stores: current.stores.map((entry) => entry.storeId === store ? updated : entry) }));
+                  })}
+                />;
               })}
             </div>
           </ConsolePanel>
 
-          <ConsolePanel title="Bots" aside={crowdRunning ? '1 running' : 'None running'}>
+          <ConsolePanel title="Bots" aside={crowdRunning || flashRunning ? `${Number(crowdRunning) + flashRunning} running` : 'None running'}>
             {lastBot ? (
               <div className="ops-last-bot">
                 <Icon name="bot" size={22} />
@@ -400,7 +450,7 @@ export default function OpsPage() {
                   <strong>{lastBot.kind ?? 'Crowd bot'}</strong>
                   <span>{lastBot.summary ?? lastBot.status ?? 'Last run updated'}</span>
                   {(lastBot.completed !== undefined || lastBot.failed !== undefined) && (
-                    <small className="bd-num">{lastBot.completed ?? 0} complete · {lastBot.failed ?? 0} failed</small>
+                    <small className="bd-num">{lastBot.completed ?? lastBot.succeeded ?? lastBot.finished ?? 0} complete · {lastBot.failed ?? 0} unsuccessful</small>
                   )}
                 </div>
               </div>
@@ -455,7 +505,9 @@ function StatusRow({ icon, label, value, tone }: { icon: IconName; label: string
   );
 }
 
-function StoreRow({ store, state, activeVersion }: { store: StoreKey; state?: StoreState; activeVersion: number }) {
+function StoreRow({ store, state, activeVersion, disabled, onToggle }: {
+  store: StoreKey; state?: StoreState; activeVersion: number; disabled: boolean; onToggle: () => void;
+}) {
   const design = STORES[store];
   const applied = state?.appliedVersion ?? 0;
   const caughtUp = applied === activeVersion;
@@ -463,9 +515,15 @@ function StoreRow({ store, state, activeVersion }: { store: StoreKey; state?: St
     <div className="ops-store-row">
       <AwningMark store={store} width={32} />
       <div><strong>{design.name}</strong><span>Policy v{applied}</span></div>
-      <span className={`ops-store-state ${!state?.online ? 'is-offline' : caughtUp ? 'is-good' : 'is-warning'}`}>
-        <i />{!state?.online ? 'Offline' : caughtUp ? 'Applied' : 'Updating'}
-      </span>
+      <div className="ops-store-controls">
+        <span className={`ops-store-state ${!state?.online ? 'is-offline' : caughtUp ? 'is-good' : 'is-warning'}`}>
+          <i />{!state?.online ? 'Offline' : caughtUp ? 'Applied' : 'Updating'}
+        </span>
+        <button type="button" className="ops-store-toggle" role="switch" aria-label={`${design.name} online`}
+          aria-checked={state?.online ?? false} disabled={disabled || !state} onClick={onToggle}>
+          <i />{state?.online ? 'Online' : 'Offline'}
+        </button>
+      </div>
     </div>
   );
 }

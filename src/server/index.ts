@@ -2,6 +2,7 @@
 import './env';
 import { createAgent } from '../agent';
 import { createCrowdBot } from '../bots/crowd';
+import { createFlashSale } from '../bots/flash';
 import { MongoChangeBus } from '../realtime/change-bus';
 import { closeDb, getDb, pingDb } from '../shared/db';
 import { AtlasStore } from '../store/atlas-store';
@@ -21,13 +22,14 @@ const store = new AtlasStore(db);
 const agent = createAgent({ store, db, bus });
 await agent.start();
 const crowd = createCrowdBot({ agent, store, db });
+const flash = createFlashSale({ store, db });
 const opsAutomation: OpsAutomation = {
   opening: (storeId) => crowd.opening({ storeId }),
   startCrowd: (storeId) => crowd.startCrowd({ storeId }),
   stopCrowd: () => crowd.stopCrowd(),
   status: () => crowd.status(),
 };
-const app = createApp({ api: { store, agent, db, opsAutomation }, realtime: { bus } });
+const app = createApp({ api: { store, agent, db, opsAutomation, flash }, realtime: { bus } });
 
 const server = app.listen(port, (error?: Error) => {
   if (error) {
