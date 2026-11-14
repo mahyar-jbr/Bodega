@@ -31,7 +31,7 @@ describe.skipIf(process.env.BODEGA_FLASH_ATLAS_TEST !== '1')('flash sale on bode
     const result = await createFlashSale({ store, db }).runFlashSale();
     console.log('FLASH_ATLAS_RESULT', JSON.stringify({ ...result, shopperIds: `[${result.shopperIds.length} bot IDs persisted]` }));
     expect(result).toMatchObject({ storeId: 'queen', kind: 'flash', status: 'done', attempted: 100,
-      succeeded: 10, failed: 90, errors: { out_of_stock: 90 }, stockAfter: 0, salesCount: 10,
+      succeeded: 10, failed: 90, errors: { out_of_stock: 90 }, stockBefore: 10, stockAfter: 0, salesCount: 10,
       walletsChecked: 100, walletsMatchLedger: true, noNegativeWallets: true,
       grantsCorrect: true, salesMatchOrders: true, passed: true, error: null });
     expect(maxActive).toBe(100);

@@ -15,6 +15,7 @@ export interface FlashSaleResult {
   failed: number;
   errors: Record<string, number>;
   error: string | null;
+  stockBefore: number | null;
   stockAfter: number | null;
   salesCount: number;
   ordersCount: number;
@@ -58,7 +59,7 @@ async function run(store: StoreApi, db: Db, storeId: StoreId): Promise<FlashSale
   const _id = new ObjectId();
   const result: FlashSaleResult = {
     runId: _id.toHexString(), kind: 'flash', storeId, status: 'running', shopperIds: [],
-    attempted: 0, succeeded: 0, failed: 0, errors: {}, error: null, stockAfter: null,
+    attempted: 0, succeeded: 0, failed: 0, errors: {}, error: null, stockBefore: null, stockAfter: null,
     salesCount: 0, ordersCount: 0, walletsChecked: 0, walletsMatchLedger: false,
     noNegativeWallets: false, grantsCorrect: false, salesMatchOrders: false, passed: false,
     startedAt: new Date(), finishedAt: null, durationMs: 0,
@@ -74,6 +75,8 @@ async function run(store: StoreApi, db: Db, storeId: StoreId): Promise<FlashSale
       { storeId, sku: FLASH_SALE.sku }, { $set: { stock: FLASH_SALE.stock } },
     );
     if (restock.matchedCount !== 1) throw new Error('Hoodie shelf missing');
+    result.stockBefore = FLASH_SALE.stock;
+    await runs.updateOne({ _id }, { $set: { stockBefore: result.stockBefore } });
 
     // Creation can be paced for Atlas. No checkout starts until every grant has committed.
     const shoppers: Shopper[] = [];

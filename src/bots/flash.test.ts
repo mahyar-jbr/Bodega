@@ -21,6 +21,7 @@ function fixture() {
   const checkout = store.checkout.bind(store);
   vi.spyOn(store, 'checkout').mockImplementation(async (input) => {
     expect(ids).toHaveLength(100);
+    expect(recorded[0].stockBefore).toBe(10);
     active++;
     maxActive = Math.max(active, maxActive);
     await Promise.resolve();
@@ -77,7 +78,7 @@ describe('flash sale', () => {
     const result = await f.flash.runFlashSale();
     expect(result).toMatchObject({
       kind: 'flash', storeId: 'queen', status: 'done', attempted: 100, succeeded: 10, failed: 90,
-      errors: { out_of_stock: 90 }, error: null, stockAfter: 0, salesCount: 10, ordersCount: 10,
+      errors: { out_of_stock: 90 }, error: null, stockBefore: 10, stockAfter: 0, salesCount: 10, ordersCount: 10,
       walletsChecked: 100, walletsMatchLedger: true, noNegativeWallets: true, grantsCorrect: true,
       salesMatchOrders: true, passed: true,
     });
