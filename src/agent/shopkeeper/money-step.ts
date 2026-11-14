@@ -6,6 +6,7 @@ import { dollarsToCents, formatCents, isValidPct, totalCents } from '../../share
 import { MAX_QTY } from '../../shared/memory-store';
 import { checkMoneyCall, type MoneyCall, type MoneyContext } from '../guard/check';
 import type { GuardrailVersion } from '../guard/types';
+import { STORE_NAMES } from './prompt';
 import type { TranscriptEntry } from './run';
 
 export interface RingUpInput {
@@ -74,10 +75,15 @@ async function ringUp(id: string, input: RingUpInput, ctx: MoneyStepContext): Pr
 
   if (decision.action === 'block') return blockedResult('ring_up', input, request, decision.rule, ctx);
   let capNote: string | undefined;
+  let capped: MoneyStepResult['blocked'];
   if (decision.action === 'cap' && request.discount) {
-    capNote = decision.rule.tellCustomer;
+    const asked = await requestedTotalCents(request, ctx);
     if (decision.pct > 0) request.discount = { ...request.discount, pct: decision.pct };
     else delete request.discount;
+    const firstSeenStore = ctx.firstSeenStore?.(decision.rule.cons) ?? null;
+    capNote = `${decision.rule.tellCustomer}${firstSeen(firstSeenStore)}`;
+    capped = { ruleId: decision.rule.id, title: decision.rule.title, firstSeenStore,
+      cents: Math.max(0, (await requestedTotalCents(request, ctx)) - asked) };
   }
 
   const result = await ctx.store.checkout(request);
@@ -99,6 +105,7 @@ async function ringUp(id: string, input: RingUpInput, ctx: MoneyStepContext): Pr
     isError: false,
     entry: { role: 'tool', name: 'ring_up', input, outcome: capNote ? 'capped' : 'done', detail: order.number },
     action: { kind: 'order', orderNumber: order.number, totalCents: order.totalCents },
+    ...(capped ? { blocked: capped } : {}),
   };
 }
 
@@ -135,12 +142,16 @@ async function blockedResult(tool: 'ring_up' | 'refund', input: unknown, request
   const cents = 'amountCents' in request ? request.amountCents : Math.max(0, listCents - (await requestedTotalCents(request, ctx)));
   const listTotal = 'items' in request ? formatCents(listCents) : undefined;
   return {
-    content: JSON.stringify({ ok: false, register_refused: true, reason: rule.tellCustomer,
+    content: JSON.stringify({ ok: false, register_refused: true, reason: `${rule.tellCustomer}${firstSeen(firstSeenStore)}`,
       ...(listTotal ? { list_price_total: listTotal, offer: 'You can ring it up at the list price instead.' } : {}) }),
     isError: false,
     entry: { role: 'tool', name: tool, input, outcome: 'blocked', detail: rule.id },
     blocked: { ruleId: rule.id, title: rule.title, firstSeenStore, cents },
   };
+}
+
+function firstSeen(storeId: StoreId | null): string {
+  return storeId ? ` (This trick was first seen at Bodega ${STORE_NAMES[storeId]}.)` : '';
 }
 
 async function requestedTotalCents(request: CheckoutRequest, ctx: MoneyStepContext): Promise<number> {

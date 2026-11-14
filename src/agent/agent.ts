@@ -4,6 +4,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { AgentError, type AgentApi, type AgentDeps, type StoreId } from '../shared/contract';
 import { STORE_IDS } from '../shared/store-data';
+import { createAuditor, type Auditor } from './auditor/auditor';
 import { atlasConversations, conversationIdFor, type ConversationLog } from './conversations';
 import { V0, type GuardrailVersion } from './guard/types';
 import { runShopkeeper } from './shopkeeper/run';
@@ -25,6 +26,7 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
   const now = options.now ?? Date.now;
   const sent = new Map<string, { last: number; count: number }>();
   const queues = new Map<string, Promise<unknown>>();
+  let auditor: Auditor | null = null;   // created in start(): it needs the database and the change bus
   // Each store's applied version and status. The store runtimes (M4-02) keep these from the change bus.
   const applied = new Map<StoreId, { version: GuardrailVersion; appliedAt: Date | null; online: boolean }>(
     STORE_IDS.map((id) => [id, { version: V0, appliedAt: null, online: true }]));
@@ -37,7 +39,10 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
   }
 
   return {
-    async start() {},
+    async start() {
+      auditor ??= createAuditor({ db: deps.db, store, bus: deps.bus });
+      await auditor.start();
+    },
 
     async handleMessage({ shopperId, storeId, text }) {
       if (typeof text !== 'string' || text.trim().length === 0) throw new AgentError('too_long', 'Say something first!');
@@ -68,6 +73,9 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
           throw error;
         }
         await conversations.append({ conversationId, shopperId, storeId, messages: result.messages.slice(history.length), at: new Date() });
+        for (const b of result.blocked) {
+          if (b.cents > 0) auditor?.recordBlocked(storeId, b.cents).catch((e) => console.error('recordBlocked failed:', e));
+        }
         return {
           reply: result.reply,
           actions: result.actions,
@@ -88,6 +96,7 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
     },
 
     async metrics() {
+      if (auditor) return auditor.metrics();
       return STORE_IDS.map((storeId) => ({ storeId, lostCents: 0, blockedCents: 0, perMinute: [] }));
     },
 
