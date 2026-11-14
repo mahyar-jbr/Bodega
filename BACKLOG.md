@@ -13,8 +13,8 @@
 | Before the event | The test data, a generic skeleton live on Render, and this plan, tagged `pre-event` | The live app's /api/health is green, and the tag is on GitHub | Fri Nov 13 | Done |
 | M1 | A real purchase through chat on a phone | M1-09, on the deployed app | 12:40 | 10 of 12 |
 | M2 | v0 gets conned, incidents and cons land in Atlas under the memory rules, and a version rolls out to every store and back | M2-09 | 14:20 | 9 of 13 |
-| M3 | The stores learn: a version is proven on the held-out set, goes live everywhere, and Roll back takes it back | M3-10, on the deployed app | 15:25 | 5 of 11 |
-| M4 | The 3-minute demo works end to end, driven only by us, and is recorded | M4-10 | 16:00 | 0 of 6 |
+| M3 | The stores learn: a version is proven on the held-out set, goes live everywhere, and Roll back takes it back | M3-10, on the deployed app | 15:25 | 7 of 11 |
+| M4 | The 3-minute demo works end to end, driven only by us, and is recorded | M4-10 | 16:00 | 1 of 6 |
 | Submit | Frozen, submitted and rehearsed | F06, submitted | 16:50 | 0 of 8 |
 
 **Owners:**
@@ -78,8 +78,8 @@ A version learned from the cons is proven on 120 held-out cases with the same mo
 | M3-08 | Reset | It deletes shoppers, orders, ledger and bot runs, restocks the shelves, keeps codes, members and stores, and calls agent.reset() | Kasra A | 14:15 | Not started |
 | M3-09 | Ops console | Reset, learning, evaluations and bots work behind the password, with agent.state() on show and three buttons: Opening, Test a strict version and Roll back | Kasra B | 14:30 | Not started |
 | M3-05 | Learner | Uncovered cons become a validated, rules-only candidate. Learning starts 10 seconds after the first new con, pauses after a rollback, and Learn now forces a cycle | Mahyar | 14:45 | In progress |
-| M3-06 | Gate and promotion | A candidate is scored on the held-out set, then promoted in one transaction or rejected with reasons, with one retry | Mahyar | 15:05 | In progress |
-| M3-11 | Gate demo | agent.gateDemo() sends a deliberately too-strict test version through the gate, and the screen shows the rejection. About $3 a press: once, at the recorded run | Mahyar | 15:10 | In progress |
+| M3-06 | Gate and promotion | A candidate is scored on the held-out set, then promoted in one transaction or rejected with reasons, with one retry | Mahyar | 15:05 | Done |
+| M3-11 | Gate demo | agent.gateDemo() sends a deliberately too-strict test version through the gate, and the screen shows the rejection. About $3 a press: once, at the recorded run | Mahyar | 15:10 | Done |
 | M3-10 | **M3 check** | On the deployed app, the crowd bot's cons trigger learn, gate and promote; every store turns immune; then Roll back, and every store forgets | Mahyar | 15:25 | Not started |
 
 ## M4 by 16:00: the demo, recorded
@@ -92,7 +92,7 @@ The 3-minute demo works end to end from a reset, driven only by us. If M3 is gre
 | M4-01 | Learning panel | It shows the cons it remembered, the new rules, the evaluation's progress and verdict, and "same model, same prompt" with the hash | Mahyar | 14:50 | In progress |
 | M4-03 | Immunity, forget and numbers | It shows each store's time to immunity and, after a rollback, its time to forget and that learning is paused, the money blocked, and the before and after numbers | Mahyar | 15:20 | In progress |
 | M4-07 | Memory panel | Each con's summary, first store and covering version, under the three memory rules. Cut 3 keeps only the rules | Mahyar | 15:45 | In progress |
-| M4-08 | Version chart | Scam success and honest service across versions. Cut 2: only if time is left | Mahyar | 15:45 | In progress |
+| M4-08 | Version chart | Scam success and honest service across versions. Cut 2: only if time is left | Mahyar | 15:45 | Done |
 | M4-10 | **M4 check, recorded** | The demo exactly as on stage, from a reset and driven only by us, with the gate demo pressed once. The presenting laptop's screen and Mahyar's phone are recorded for the video and the backup | both | 16:00 | Not started |
 
 ## Submit by 16:50
@@ -117,7 +117,7 @@ Frozen at 16:15, submitted by 16:50 (the deadline is 17:00), and rehearsed by 17
 | X1 | A store goes offline, a new con is learned, and the store catches up live when it's back | both | Not started |
 | X2 | A voice hotline with ElevenLabs (it needs an ElevenLabs key) | Mahyar | Not started |
 | X3 | Atlas agent memory for regular customers | Mahyar | Not started |
-| X4 | An audit-trail panel for one con: its summary, ledger entries, incident and the version that blocks it | Mahyar | Not started |
+| X4 | An audit-trail panel for one con: its summary, ledger entries, incident and the version that blocks it | Mahyar | In progress |
 | M4-05 | Flash sale: the limited hoodie is restocked to 10, then 100 bot buyers race for it; exactly 10 sell, and every wallet matches its ledger | Kasra A | Not started |
 | M4-09 | The flash sale's result on the big screen | Mahyar | Not started |
 
