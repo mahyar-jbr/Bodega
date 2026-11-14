@@ -15,7 +15,7 @@
 | M2 | v0 gets conned, incidents and cons land in Atlas under the memory rules, and a version rolls out to every store and back | M2-09 | 14:20 | Done |
 | M3 | The stores learn: a version is proven on the held-out set, goes live everywhere, and Roll back takes it back | M3-10, on the deployed app | 15:25 | Done |
 | M4 | The 3-minute demo works end to end, driven only by us, on the live app | M4-10 | 16:00 | Done |
-| Submit | Frozen, submitted and rehearsed | F06, submitted | 16:50 | 2 of 8 |
+| Submit | Frozen, submitted and rehearsed | F06, submitted | 16:50 | 4 of 8 |
 
 **Owners:**
 - **Mahyar** owns the agent side. His PM tab hands each of his tasks to one of two coding tabs.
@@ -101,13 +101,13 @@ Frozen at 16:15, submitted by 16:50 (the deadline is 17:00), and rehearsed by 17
 
 | ID | Task | Done when | Owner | By | State |
 |---|---|---|---|---|---|
-| F02 | Fixes from the final run | Only fixes from the 16:00 dry run on the live app; nothing new | both | 16:15 | Not started |
+| F02 | Fixes from testing | Done during the day: the iPhone voice, auto-play, the live transcript, shop tabs surviving a reset, the /stage layout on laptop windows | both | 16:15 | Done |
 | F03 | Code freeze | No code is pushed after 16:15 (README.md excepted), the last deploy is green, `npm run fresh-show` has run on the live database and `npm run smoke` passes | both | 16:15 | Not started |
-| F01 | README | Final, with the visuals, the video link and the numbers from the 16:00 dry run | Mahyar | 16:40 | In progress |
+| F01 | README | Final: visuals, the video link, the voice line, the Flow scene, and the live test results (3 of 3 stage runs, a judge probe with 0 of 20 cons working) | Mahyar | 16:40 | In progress |
 | F04 | Launch video | The 1-minute launch video, with ElevenLabs narration and two real voice calls to the live app, is on YouTube and linked in the README | Mahyar | 16:30 | Done |
 | F05 | Backup | The launch video (YouTube) and the README's live visuals are the backup: if the live app fails on stage, play the video | Kasra | 16:40 | Done |
 | F06 | Submitted | The repo is checked for personal files and secrets, the `pre-event` tag and the README's "Built at the event" section are in place, and the live link, description, video, problem statement 2 and both of us are on the submission page | Mahyar | 16:50 | Not started |
-| F07 | Rehearsed | The 3-minute demo twice and the 90-second version once | both | 17:10 | Not started |
+| F07 | Rehearsed | The slides, then /stage on one laptop: Opening + the cold-coffee con at Queen → Flow learns → refused at Yonge → TORONTO5 served at Scarborough → numbers (key 4). Twice in full, once in 90 s; rollback kept for Q&A | both | 17:10 | In progress |
 | F08 | Service deleted | The Render service is deleted after judging | Mahyar | After judging | Not started |
 
 ## Extras built at the event
@@ -115,11 +115,11 @@ Frozen at 16:15, submitted by 16:50 (the deadline is 17:00), and rehearsed by 17
 | ID | Task | Owner | State |
 |---|---|---|---|
 | X1 | A store goes offline, a new con is learned, and the store catches up live when it's back | both | Done |
-| X2 | Voice with ElevenLabs: push-to-talk in the shop (speech-to-text, the same frozen shopkeeper and guard, text-to-speech), live on iPhone, Android and Chrome; the live transcript while you talk (#8) is being verified | Mahyar | In progress |
+| X2 | Voice with ElevenLabs: push-to-talk in the shop (speech-to-text, the same frozen shopkeeper and guard, text-to-speech), a live transcript while you speak, and spoken replies that play automatically; verified on iPhone, Android and Chrome | Mahyar | Done |
 | X4 | An audit-trail panel for one con: its summary, ledger entries, incident and the version that blocks it | Mahyar | Done |
 | X5 | Approve before going live: with approvalRequired on, a proven version waits for a person to tap Approve (or Reject) before any store applies it | Mahyar | Done |
 | X6 | Forget one shopper: their raw chats are deleted and their incidents anonymised, while the learned rules stay; counts shown | Mahyar | Done |
 | X7 | Atlas refuses a leak, live: a probe tries to store raw chat text in incidents and schema validation rejects it (code 121) on screen | Mahyar | Done |
-| X8 | The Flow scene: the whole loop (shopper → shopkeeper → guard → Atlas transaction → change stream → auditor → incident → Agent Memory → learner → gate → guardrail version → change stream → stores → block → rollback) lights up live with real values; the auto scene during the loop | Mahyar | In progress |
+| X8 | The Flow scene: the whole loop (shopper → shopkeeper → guard → Atlas transaction → change stream → auditor → incident → Agent Memory → learner → gate → guardrail version → change stream → stores → block → rollback) lights up live with real values; the auto scene during the loop | Mahyar | Done |
 | M4-05 | Flash sale: the limited hoodie is restocked to 10, then 100 bot buyers race for it; exactly 10 sell, and every wallet matches its ledger | Kasra A | Done |
 | M4-09 | The flash sale's result on the big screen | Mahyar | Done |
