@@ -7,6 +7,7 @@ import type { AgentMetrics, IncidentDoc, MetricPoint } from '../auditor/auditor'
 import { sweepInterruptedEvaluations, type EvaluationDoc } from '../eval/record';
 import type { ConDoc } from '../memory/con-memory';
 import { TTL_INDEX } from '../memory/memory-rules';
+import { buildFlow, type FlowInputs, type FlowView } from './flow';
 import { MEMORY_PROOFS, type MemoryProof } from '../memory-proof';
 import { AGENT_STATE, CONS, GUARDRAILS, INCIDENTS, ROLLOUTS, type AgentStateDoc, type GuardrailDoc } from '../rollout/state';
 import type { RolloutDoc } from '../rollout/runtimes';
@@ -15,7 +16,7 @@ const STORES: StoreId[] = ['queen', 'yonge', 'scarborough'];
 const STORE_NAME: Record<StoreId, string> = { queen: 'Queen St', yonge: 'Yonge St', scarborough: 'Scarborough' };
 const FEED_MAX = 8;
 
-export type Scene = 'round1' | 'learning' | 'immunity' | 'round2' | 'memory' | 'audit' | 'flash';
+export type Scene = 'round1' | 'learning' | 'immunity' | 'round2' | 'memory' | 'audit' | 'flash' | 'flow';
 export type StoreStatus = 'idle' | 'conned' | 'learning' | 'immune' | 'offline';
 export type FeedKind = 'sale' | 'con-worked' | 'con-blocked' | 'rule-promoted' | 'rule-rejected' | 'learning' | 'rollback';
 
@@ -51,6 +52,7 @@ export interface ScreenSnapshot {
   audits: AuditTrail[];
   flash: FlashSale | null;
   memory: MemoryGovernance;
+  flow: FlowView;
   results: null | {
     before: { version: number; scamsPct: number; honestAway: number };
     after: { version: number; scamsPct: number; honestAway: number };
@@ -161,7 +163,7 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
     db.collection<MetricPoint>('attack_metrics').find({ 'meta.epoch': epoch, 'meta.kind': 'blocked' }).sort({ ts: -1 }).limit(200).toArray(),
     db.collection<EvaluationDoc>('evaluations').find({ set: 'heldout' }).sort({ startedAt: -1 }).limit(20).toArray(),
     state ? db.collection<RolloutDoc>(ROLLOUTS).find({ changedAt: state.changedAt }).toArray() : Promise.resolve([]),
-    db.collection('orders').find({}, { projection: { number: 1, storeId: 1, shopperId: 1, lines: 1, totalCents: 1, createdAt: 1 } })
+    db.collection('orders').find({}, { projection: { number: 1, storeId: 1, shopperId: 1, lines: 1, totalCents: 1, discount: 1, createdAt: 1 } })
       .sort({ createdAt: -1 }).limit(FEED_MAX).toArray(),
   ]);
 
@@ -489,13 +491,64 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
       text: short(`Every store back on v${r.to}`), amountCents: null, at: r.at.toISOString() })),
   ].sort((a, b) => b.at.localeCompare(a.at)).slice(0, FEED_MAX);
 
+  // ── Flow: the whole mechanism as one loop, lit by what happened this epoch ──
+  const flow = await flowView();
+  async function flowView(): Promise<FlowView> {
+    const inc = incidents[0];
+    const con = inc?.conId ? cons.find((c) => c._id === inc.conId) : undefined;
+    const honestOrder = orders.find((o) => !conned.has(o.number) && new Date(o.createdAt) >= epochStart);
+    const promotedDoc = guardrails.find((g) => g.source !== 'v0' && g.source !== 'gate-demo' && g.createdAt >= epochStart
+      && ['promoted', 'rolled_back', 'awaiting_approval'].includes(String(g.status)));
+    const promotedAt = promotedDoc ? promotedDoc.promotedAt ?? (promotedDoc as GuardrailDoc & { awaitingSince?: Date }).awaitingSince ?? promotedDoc.createdAt : null;
+    const promoteRows = promotedDoc?.promotedAt ? dedupeRollouts(await db.collection<RolloutDoc>(ROLLOUTS)
+      .find({ version: promotedDoc._id, change: 'promote', changedAt: promotedDoc.promotedAt }).toArray(), promotedDoc._id) : [];
+    const lastRollback = (state?.rollbacks ?? []).filter((r) => r.at >= epochStart).at(-1);
+    const rollbackRows = lastRollback ? dedupeRollouts(await db.collection<RolloutDoc>(ROLLOUTS)
+      .find({ change: 'rollback', changedAt: lastRollback.at }).toArray(), lastRollback.to) : [];
+    const block = blocks.find((b) => b.ts >= epochStart);
+    const blockCon = block ? cons.find((c) => (ruleCons.get(`${block.version}:${block.ruleId}`) ?? []).includes(c._id)) : undefined;
+    const testEvalDoc = learning ? evaluations.find((e) => e.version === learning!.guardrail.version && e.startedAt >= epochStart) : undefined;
+    const flowEvents = await db.collection<{ at: Date | string; node: string; storeId: StoreId | null; value: string; ms?: number | null;
+      score?: number | null; version?: number | null; cents?: number | null; firstSeenStore?: StoreId | null }>('flow_events')
+      .find({}).sort({ _id: -1 }).limit(120).toArray().catch(() => []);
+    const inputs: FlowInputs = {
+      now: Date.now(), hash: deps.settingsHash, activeVersion,
+      incident: inc ? { nickname: inc.nickname, storeId: inc.storeId, kind: inc.kind, lossCents: inc.lossCents, violations: inc.violations,
+        title: inc.title, summary: inc.summary, orderNumber: inc.orderNumber, conId: inc.conId, at: inc.at, createdAt: inc.createdAt } : null,
+      con: con ? { grouping: con.grouping, matchScore: con.matchScore, incidents: con.incidents, firstSeenStore: con.firstSeenStore, lastSeenAt: con.lastSeenAt } : null,
+      honest: honestOrder ? { nickname: nicknames.get(String(honestOrder.shopperId)) ?? null, storeId: honestOrder.storeId as StoreId,
+        number: honestOrder.number as string, totalCents: honestOrder.totalCents as number,
+        codePct: (honestOrder.discount as { pct?: number } | null)?.pct ?? null, code: (honestOrder.discount as { code?: string } | null)?.code ?? null,
+        at: new Date(honestOrder.createdAt) } : null,
+      learning: learning ? {
+        phase: learning!.phase, rules: learning!.guardrail.rules, ruleCount: learning!.guardrail.rules.length, version: learning!.guardrail.version,
+        startedAt: run?.startedAt ?? testEvalDoc?.startedAt ?? null,
+        test: learning!.test.total ? learning!.test : null, scamsTotal: learning!.scamsTotal, honestTotal: learning!.honestTotal,
+        testStartedAt: testEvalDoc?.startedAt ?? null, testFinishedAt: testEvalDoc?.finishedAt ?? null, verdict: learning!.verdict,
+      } : null,
+      promoted: promotedDoc && promotedAt ? { version: promotedDoc._id, at: promotedAt, status: String(promotedDoc.status) } : null,
+      rollout: promotedDoc?.promotedAt ? { kind: 'immune', version: promotedDoc._id, toVersion: promotedDoc._id, at: promotedDoc.promotedAt,
+        stores: STORES.map((st) => ({ store: st, ms: promoteRows.find((r) => r.storeId === st)?.ms ?? null })),
+        lastAppliedAt: promoteRows.length ? new Date(Math.max(...promoteRows.map((r) => new Date(r.appliedAt).getTime()))) : null } : null,
+      block: block ? { nickname: block.nickname ?? null, storeId: block.meta.storeId, title: block.title ?? null,
+        firstSeenStore: blockCon?.firstSeenStore ?? null, version: block.version ?? null, at: block.ts } : null,
+      rollback: lastRollback ? { from: lastRollback.from, to: lastRollback.to, at: lastRollback.at,
+        stores: STORES.map((st) => ({ store: st, ms: rollbackRows.find((r) => r.storeId === st)?.ms ?? null })) } : null,
+      events: flowEvents.map((e) => ({ ...e, at: new Date(e.at) })).filter((e) => e.at >= epochStart).reverse(),
+    };
+    return buildFlow(inputs);
+  }
+
   // ── The scene the state suggests ──
   const changedAt = state?.changedAt ?? new Date(0);
   const sinceChange = Date.now() - changedAt.getTime();
+  const looping = incidents.length > 0 || activeVersion > 0 || (state?.rollbacks ?? []).some((r) => r.at >= epochStart);
   const scene: Scene =
-    state?.change === 'rollback' && sinceChange < 60_000 ? 'immunity'
-    : learning && (learning.phase === 'drafting' || learning.phase === 'testing') ? 'learning'
+    demo && learning && (!demo.finishedAt || Date.now() - demo.finishedAt.getTime() < 60_000) ? 'learning'
     : learning?.phase === 'awaiting' ? 'learning'
+    : looping ? 'flow'
+    : state?.change === 'rollback' && sinceChange < 60_000 ? 'immunity'
+    : learning && (learning.phase === 'drafting' || learning.phase === 'testing') ? 'learning'
     : demo && learning && demo.finishedAt && Date.now() - demo.finishedAt.getTime() < 60_000 ? 'learning'
     : learning?.phase === 'rejected' && run?.finishedAt && Date.now() - run.finishedAt.getTime() < 60_000 ? 'learning'
     : learning?.phase === 'rejected' && rejectedRecently(byVersion.get(learning.guardrail.version)) ? 'learning'
@@ -503,7 +556,7 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
     : state?.change === 'promote' && sinceChange < 30_000 ? 'immunity'
     : activeVersion > 0 ? 'round2' : 'round1';
 
-  return { scene, activeVersion, epoch, tiles, feed, cons: conRows, learning, rollout, versions, audits, flash, memory, results };
+  return { scene, activeVersion, epoch, tiles, feed, cons: conRows, learning, rollout, versions, audits, flash, memory, flow, results };
 }
 
 /** One rollout per store for a change: duplicates (by store, version, change and changedAt) collapse to the fastest. */

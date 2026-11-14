@@ -29,7 +29,7 @@ export function AwningMark({ store, width }: { store: StoreKey | 'brand'; width:
 // scale-down where it can, down to 1640 wide (the stage view: about 0.89, so 26px reads as 23px).
 const DESIGN_H = 1080, MAX_W = 1920, MIN_W = 1640;
 
-export function StageFrame({ children }: { children: ReactNode }) {
+export function StageFrame({ children, scene }: { children: ReactNode; scene?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ scale: 1, x: 0, y: 0, w: MAX_W });
   useLayoutEffect(() => {
@@ -48,7 +48,7 @@ export function StageFrame({ children }: { children: ReactNode }) {
     return () => observer.disconnect();
   }, []);
   return (
-    <div ref={ref} className="bs-stage" data-narrow={box.w < 1800 ? 'true' : undefined}
+    <div ref={ref} className="bs-stage" data-scene={scene} data-narrow={box.w < 1800 ? 'true' : undefined}
       style={{ width: box.w, transform: `translate(${box.x}px, ${box.y}px) scale(${box.scale})` }}>
       {children}
     </div>
@@ -57,13 +57,14 @@ export function StageFrame({ children }: { children: ReactNode }) {
 
 const SCENE_TONE: Record<Scene, string> = {
   round1: 'var(--loss)', learning: 'var(--learning)', immunity: 'var(--immune)',
-  round2: 'var(--immune)', memory: 'var(--learning)', audit: 'var(--learning)', flash: 'var(--served)',
+  round2: 'var(--immune)', memory: 'var(--learning)', audit: 'var(--learning)', flash: 'var(--served)', flow: 'var(--immune)',
 };
 
-export function StageHeader({ scene }: { scene: Scene }) {
-  // The audit trail belongs to the Memory beat, and the flash sale (for questions) to Round 2.
-  const beats = SCENES.filter((s) => s.key !== 'audit' && s.key !== 'flash');
-  const beat = scene === 'audit' ? 'memory' : scene === 'flash' ? 'round2' : scene;
+export function StageHeader({ scene, flowBeat }: { scene: Scene; flowBeat?: Scene | null }) {
+  // The audit trail belongs to the Memory beat, the flash sale (for questions) to Round 2, and the Flow
+  // scene to whichever beat its active step is in.
+  const beats = SCENES.filter((s) => s.key !== 'audit' && s.key !== 'flash' && s.key !== 'flow');
+  const beat = scene === 'audit' ? 'memory' : scene === 'flash' ? 'round2' : scene === 'flow' ? (flowBeat ?? 'round1') : scene;
   const current = beats.findIndex((s) => s.key === beat);
   return (
     <header className="bs-header">

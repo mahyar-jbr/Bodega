@@ -12,7 +12,7 @@ export const EMPTY: ScreenData = {
   scene: 'round1',
   tiles: (['queen', 'yonge', 'scarborough'] as StoreKey[]).map((store) => ({
     store, status: 'idle', policy: 0, learnedAt: null, lostCents: 0, blocked: 0, immuneInMs: null })),
-  feed: [], cons: [], learning: null, rollout: null, results: null, versions: [], audits: [], flash: null, memory: { proof: null, ttlSeconds: null, forgotten: 0 },
+  feed: [], cons: [], learning: null, rollout: null, results: null, versions: [], audits: [], flash: null, memory: { proof: null, ttlSeconds: null, forgotten: 0 }, flow: null,
 };
 
 export function fromSnapshot(s: ScreenSnapshot): ScreenData {
@@ -29,6 +29,7 @@ export function fromSnapshot(s: ScreenSnapshot): ScreenData {
     audits: s.audits ?? [],
     flash: s.flash ?? null,
     memory: s.memory ?? { proof: null, ttlSeconds: null, forgotten: 0 },
+    flow: s.flow ?? null,
   };
 }
 

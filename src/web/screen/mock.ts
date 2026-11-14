@@ -1,5 +1,6 @@
 // Sample data for building the big screen before the live routes exist. Swapped out in
 // useScreenData once /api/agent/state answers. Summaries only, never a customer's words.
+import { buildFlow } from '../../agent/screen/flow';
 import type { ScreenData } from './types';
 
 const ago = (seconds: number) => new Date(Date.now() - seconds * 1000);
@@ -64,6 +65,22 @@ export const MOCK: ScreenData = {
   }],
   memory: { proof: { at: ago(5).toISOString(), refused: true, code: 121, message: 'Document failed validation', collection: 'incidents', field: 'text' },
     ttlSeconds: 86_400, forgotten: 1 },
+  flow: buildFlow({
+    now: Date.now(), hash: '6adbcc65b15bc033c4cb5aad921eca17af4ed709e768632c7b5fe0f82df4b345', activeVersion: 1,
+    incident: { nickname: 'Sneaky Raccoon', storeId: 'queen', kind: 'refund', lossCents: 950, violations: ['refund_no_order'],
+      title: 'refund for nothing', summary: 'Refund for a soggy sandwich never bought', orderNumber: null, conId: 'c1', at: ago(70), createdAt: ago(69.9) },
+    con: { grouping: 'agent-memory', matchScore: 0.88, incidents: 3, firstSeenStore: 'queen', lastSeenAt: ago(69) },
+    honest: null,
+    learning: { phase: 'promoted', rules: ['A refund needs an order this shopper paid', 'Every item at list price or more', 'A discount needs a real code'],
+      ruleCount: 3, version: 1, startedAt: ago(58), test: { done: 120, total: 120, scamsTested: 60, scamsStopped: 60, honestTested: 60, honestServed: 57 },
+      scamsTotal: 60, honestTotal: 60, testStartedAt: ago(45), testFinishedAt: ago(28), verdict: 'Promoted' },
+    promoted: { version: 1, at: ago(27), status: 'promoted' },
+    rollout: { kind: 'immune', version: 1, toVersion: 1, at: ago(27), lastAppliedAt: ago(26.7),
+      stores: [{ store: 'queen', ms: 320 }, { store: 'yonge', ms: 320 }, { store: 'scarborough', ms: 319 }] },
+    block: { nickname: 'Midnight Moose', storeId: 'yonge', title: 'A refund needs an order this shopper paid', firstSeenStore: 'queen', version: 1, at: ago(9) },
+    rollback: null,
+    events: [],
+  }),
   flash: { store: 'queen', attempted: 100, sold: 10, stock: 10, stockAfter: 0, oversold: 0, walletsMatchLedger: true,
     noNegativeWallets: true, passed: true, durationMs: 1_840, at: ago(30).toISOString() },
   results: {

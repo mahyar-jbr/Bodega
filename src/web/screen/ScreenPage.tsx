@@ -4,6 +4,7 @@ import './screen.css';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useScreenData } from './live';
+import { FlowScene, flowBeat } from './FlowScene';
 import { AuditPanel, FlashPanel, LearningPanel, MemoryPanel, ResultsRow, RolloutPanel, VersionChart } from './panels';
 import { ConWall, LiveFeed, StageFrame, StageHeader, StoreTile } from './parts';
 import { SCENES, type Scene, type ScreenData } from './types';
@@ -54,16 +55,20 @@ export function BigScreen() {
 
   return (
     <div className="bs-screen" data-connection={connection}>
-      <StageFrame>
-        <StageHeader scene={scene} />
-        <div className="bs-tiles">
-          {data.tiles.map((t) => <StoreTile key={t.store} tile={t} />)}
-        </div>
-        <div className="bs-lower">
-          <MainPanel scene={scene} data={data} auditIndex={auditIndex}
-            onOpenCon={(id) => { const i = data.audits.findIndex((a) => a.conId === id); if (i >= 0) openAudit(i); }} />
-          <LiveFeed items={data.feed} />
-        </div>
+      <StageFrame scene={scene}>
+        <StageHeader scene={scene} flowBeat={scene === 'flow' ? flowBeat(data.flow?.active ?? null) : null} />
+        {scene === 'flow' && data.flow ? <FlowScene flow={data.flow} /> : (
+          <>
+            <div className="bs-tiles">
+              {data.tiles.map((t) => <StoreTile key={t.store} tile={t} />)}
+            </div>
+            <div className="bs-lower">
+              <MainPanel scene={scene} data={data} auditIndex={auditIndex}
+                onOpenCon={(id) => { const i = data.audits.findIndex((a) => a.conId === id); if (i >= 0) openAudit(i); }} />
+              <LiveFeed items={data.feed} />
+            </div>
+          </>
+        )}
         {pinned && <div className="bs-pin stage-label">{SCENES.find((x) => x.key === pinned)!.label} pinned · 0 for auto</div>}
         {connection === 'stale' && <div className="bs-pin bs-pin-right stage-label">Reconnecting</div>}
       </StageFrame>
