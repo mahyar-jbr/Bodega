@@ -15,7 +15,7 @@
 | M2 | v0 gets conned, incidents and cons land in Atlas under the memory rules, and a version rolls out to every store and back | M2-09 | 14:20 | Done |
 | M3 | The stores learn: a version is proven on the held-out set, goes live everywhere, and Roll back takes it back | M3-10, on the deployed app | 15:25 | Done |
 | M4 | The 3-minute demo works end to end, driven only by us, on the live app | M4-10 | 16:00 | Done |
-| Submit | Frozen, submitted and rehearsed | F06, submitted | 16:50 | 4 of 8 |
+| Submit | Frozen, submitted and rehearsed | F06, submitted | 16:50 | 3 of 8 |
 
 **Owners:**
 - **Mahyar** owns the agent side. His PM tab hands each of his tasks to one of two coding tabs.
