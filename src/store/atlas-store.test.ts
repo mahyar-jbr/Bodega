@@ -15,10 +15,11 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await Promise.all([
-    'products', 'codes', 'members', 'stores', 'shoppers', 'orders', 'ledger', 'counters',
-  ].map((name) => db.collection(name).deleteMany({})));
-  await closeDb();
+  try {
+    await db.dropDatabase();
+  } finally {
+    await closeDb();
+  }
 });
 
 async function makeFreshAtlasStore(): Promise<AtlasStore> {

@@ -7,17 +7,17 @@ import { seedDatabase, STORE_SEEDS } from './seed';
 
 const testRunId = `${process.pid}_${randomBytes(4).toString('hex')}`;
 const db = getClient().db(`${dbName()}_reset_${testRunId}`);
-const collections = [
-  'products', 'codes', 'members', 'stores', 'shoppers', 'orders', 'ledger', 'counters', 'bot_runs', 'evaluations',
-];
 
 beforeAll(async () => {
   await seedDatabase(db);
 });
 
 afterAll(async () => {
-  await Promise.all(collections.map((name) => db.collection(name).deleteMany({})));
-  await closeDb();
+  try {
+    await db.dropDatabase();
+  } finally {
+    await closeDb();
+  }
 });
 
 describe('resetStoreData', () => {
