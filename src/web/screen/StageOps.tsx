@@ -78,6 +78,7 @@ export function StageOps() {
         pending.current = a; setAsking(true);
         say(pw ? 'Password rejected' : 'This server wants the ops password', true);
       }
+      else if (e instanceof ApiError && e.status === 429) say(`${a.label}: too soon, ${e.message}`, true);   // an open server's rate limit
       else say(`${a.label} failed: ${e instanceof Error ? e.message : 'error'}`, true);
     } finally { setBusy(null); }
   };
