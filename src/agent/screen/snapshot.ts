@@ -106,7 +106,7 @@ export interface AuditTrail {
 // Eng 1's learning cycles (src/agent/learner): one document per cycle.
 interface LearningRunDoc {
   _id: unknown; epoch: number; trigger: 'auto' | 'now'; cons: string[];
-  phase: 'learning' | 'gating' | 'promoted' | 'rejected' | 'failed';
+  phase: 'learning' | 'gating' | 'awaiting_approval' | 'promoted' | 'rejected' | 'rejected_by_operator' | 'failed';
   attempts: { attempt: number; version: number; title: string; rules: string[]; verdict?: string; reasons?: string[]; evaluationId?: string; learnMs?: number }[];
   startedAt: Date; finishedAt: Date | null; error?: string | null;
 }
@@ -227,6 +227,7 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
     const phase: NonNullable<ScreenSnapshot['learning']>['phase'] = run
       ? run.phase === 'learning' ? 'drafting'
         : run.phase === 'gating' ? 'testing'
+        : run.phase === 'awaiting_approval' ? 'awaiting'
         : run.phase === 'promoted' ? 'promoted'
         : 'rejected'
       : state?.learning ? 'drafting'
@@ -258,6 +259,10 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
       settingsHash: testEval?.settingsHash ?? deps.settingsHash,
       verdict: phase === 'promoted'
         ? (s ? `Promoted: scams that work ${s.scams.successPct}%, ${s.honest.turnedAway} of ${s.honest.total} honest turned away` : 'Promoted')
+        : phase === 'rejected' && (run?.phase === 'rejected_by_operator' || String(byVersion.get(versionNo)?.status) === 'rejected_by_operator')
+          ? operatorVerdict(byVersion.get(versionNo))
+        : phase === 'awaiting'
+          ? `Proven on ${scamsTotal + honestTotal} unseen cases. Waiting for a person to approve`
         : phase === 'rejected'
           ? `Rejected: ${reasons[0] ?? (run?.phase === 'failed' ? 'the run failed' : 'it did not beat the current version')}`
           : null,
@@ -326,9 +331,11 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
   }
   for (const g of [...guardrails].reverse()) {
     const e = recentEvals.find((x) => x.version === g._id && x.status === 'done' && x.summary);
-    if (!e?.summary || g.status === 'candidate') continue;
-    const rejected = g.status === 'rejected';
-    versions.push({ v: g._id, label: rejected ? `v${g._id} draft` : `v${g._id}`, scamsPct: e.summary.scams.successPct,
+    const status = String(g.status);
+    if (!e?.summary || status === 'candidate' || status === 'awaiting_approval') continue;
+    const byOperator = status === 'rejected_by_operator';
+    const rejected = status === 'rejected' || byOperator;
+    versions.push({ v: g._id, label: byOperator ? `v${g._id} declined` : rejected ? `v${g._id} draft` : `v${g._id}`, scamsPct: e.summary.scams.successPct,
       honestAwayPct: e.summary.honest.turnedAwayPct, rejected });
   }
 
@@ -451,11 +458,15 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
       return { id: `o:${o._id}`, kind: 'sale' as const, who: nicknames.get(String(o.shopperId)) ?? 'A shopper',
         text: short(what), amountCents: o.totalCents as number, at: new Date(o.createdAt).toISOString() };
     }),
-    ...guardrails.filter((g) => g.status !== 'candidate' && (g.promotedAt ?? g.createdAt) >= (sinceReset ?? new Date(0))).map((g) => ({
-      id: `g:${g._id}:${g.status}`, kind: (g.status === 'rejected' ? 'rule-rejected' : 'rule-promoted') as FeedKind,
-      who: g.status === 'rejected' ? `v${g._id} rejected` : `Policy v${g._id} is live`,
-      text: short(g.status === 'rejected' ? 'Failed the 120-case test' : promotedText(g, byVersion.get(g.parentVersion ?? 0))),
-      amountCents: null, at: (g.promotedAt ?? g.createdAt).toISOString() })),
+    ...guardrails.filter((g) => String(g.status) !== 'candidate' && versionEventAt(g) >= (sinceReset ?? new Date(0))).map((g) => {
+      const status = String(g.status);
+      const [kind, who, text]: [FeedKind, string, string] =
+        status === 'rejected' ? ['rule-rejected', `v${g._id} rejected`, 'Failed the 120-case test']
+        : status === 'rejected_by_operator' ? ['rule-rejected', `v${g._id} rejected by the operator`, 'Proven, but a person said no']
+        : status === 'awaiting_approval' ? ['learning', `v${g._id} awaiting approval`, 'Proven on 120 unseen cases']
+        : ['rule-promoted', `Policy v${g._id} is live`, promotedText(g, byVersion.get(g.parentVersion ?? 0))];
+      return { id: `g:${g._id}:${status}`, kind, who, text: short(text), amountCents: null, at: versionEventAt(g).toISOString() };
+    }),
     ...(memory.proof && new Date(memory.proof.at) >= epochStart ? [{
       id: `p:${memory.proof.at}`, kind: (memory.proof.refused ? 'con-blocked' : 'con-worked') as FeedKind,
       who: `Tried to store raw chat text in ${memory.proof.collection}`,
@@ -487,6 +498,7 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
     : learning?.phase === 'awaiting' ? 'learning'
     : demo && learning && demo.finishedAt && Date.now() - demo.finishedAt.getTime() < 60_000 ? 'learning'
     : learning?.phase === 'rejected' && run?.finishedAt && Date.now() - run.finishedAt.getTime() < 60_000 ? 'learning'
+    : learning?.phase === 'rejected' && rejectedRecently(byVersion.get(learning.guardrail.version)) ? 'learning'
     : learning?.phase === 'rejected' && !run && newest && Date.now() - newest.createdAt.getTime() < 60_000 ? 'learning'
     : state?.change === 'promote' && sinceChange < 30_000 ? 'immunity'
     : activeVersion > 0 ? 'round2' : 'round1';
@@ -514,4 +526,22 @@ function promotedText(g: GuardrailDoc, parent: GuardrailDoc | undefined): string
   const known = new Set(parent.rules.map((r) => r.title.trim().toLowerCase()));
   const added = g.rules.filter((r) => !known.has(r.title.trim().toLowerCase())).length;
   return added > 0 ? `${added} new ${added === 1 ? 'rule' : 'rules'} on v${parent._id}` : `Rewrites v${parent._id}'s rules`;
+}
+
+type VersionDecision = GuardrailDoc & { rejectedAt?: Date | null; rejectReason?: string | null; awaitingSince?: Date | null; approvedAt?: Date | null };
+
+/** When a version last changed state, for the feed: promoted, rejected by a person, or waiting for one. */
+function versionEventAt(g: GuardrailDoc): Date {
+  const d = g as VersionDecision;
+  return d.rejectedAt ?? g.promotedAt ?? d.awaitingSince ?? g.createdAt;
+}
+
+function operatorVerdict(g: GuardrailDoc | undefined): string {
+  const reason = (g as VersionDecision | undefined)?.rejectReason;
+  return reason && reason !== 'reset' ? `Rejected by the operator: ${reason}` : 'Rejected by the operator';
+}
+
+function rejectedRecently(g: GuardrailDoc | undefined): boolean {
+  const at = (g as VersionDecision | undefined)?.rejectedAt;
+  return !!at && Date.now() - new Date(at).getTime() < 60_000;
 }
