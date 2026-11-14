@@ -19,7 +19,9 @@ export interface StoreRuntimeDoc {
 export interface RolloutDoc {
   version: number;
   storeId: StoreId;
-  change: StateChange;          // promote: time to immunity; rollback: time to forget
+  /** promote: time to immunity; rollback: time to forget; catchup: a store back online applying the
+   *  change it missed (ms is then measured from the change it missed). */
+  change: StateChange | 'catchup';
   changedAt: Date;
   appliedAt: Date;
   ms: number;
@@ -69,7 +71,7 @@ export function createStoreRuntimes({ db, bus, pollMs = 3_000 }: StoreRuntimesOp
       // deploy), the first one to apply it records the time; the others leave it alone.
       if (change >= startedAt) {
         await db.collection<RolloutDoc>(ROLLOUTS).updateOne(
-          { storeId, version: version.version, change: doc.change, changedAt: doc.changedAt },
+          { storeId, version: version.version, change: via === 'catch-up' ? 'catchup' : doc.change, changedAt: doc.changedAt },
           { $setOnInsert: { appliedAt, ms: appliedAt.getTime() - change, via } },
           { upsert: true },
         ).catch((e) => { if ((e as { code?: number }).code !== 11000) throw e; });
