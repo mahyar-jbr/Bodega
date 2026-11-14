@@ -1,11 +1,12 @@
 import { type FormEvent, type KeyboardEvent, type PointerEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import type { AgentApi } from '../../shared/contract';
 import { ApiError, apiJson } from '../ui/api';
 import { AwningMark } from '../ui/AwningMark';
 import { Icon, type IconName } from '../ui/Icon';
 import { Logo } from '../ui/Logo';
 import { isStoreKey, STORES, STORE_KEYS, type StoreKey } from '../ui/stores';
 import { FlashSalePanel, latestFlashRun, type FlashRunView } from './FlashSalePanel';
+import { GovernancePanel, type GovernanceAction, type ActionOutcome } from './GovernancePanel';
+import { parseAgentState, type AgentState, type StoreState } from './state';
 import '../ui/theme.css';
 import './ops.css';
 
@@ -21,9 +22,6 @@ const OPS_ENDPOINTS = {
   crowdStatus: '/api/ops/crowd/status',
   flash: '/api/ops/flash',
 } as const;
-
-type AgentState = Awaited<ReturnType<AgentApi['state']>>;
-type StoreState = AgentState['stores'][number];
 
 type HealthState = {
   ok: boolean;
@@ -60,32 +58,15 @@ function clockTime() {
     .replace(/\s[ap]\.m\.$/i, '');
 }
 
-function parseAgentState(value: unknown): AgentState {
-  const outer = value && typeof value === 'object' ? value as Record<string, unknown> : {};
-  const payload = outer.state && typeof outer.state === 'object' ? outer.state as Record<string, unknown> : outer;
-  const stores = Array.isArray(payload.stores) ? payload.stores.flatMap((item): StoreState[] => {
-    if (!item || typeof item !== 'object') return [];
-    const store = item as Record<string, unknown>;
-    const storeId = typeof store.storeId === 'string' ? store.storeId : undefined;
-    if (!isStoreKey(storeId)) return [];
-    return [{
-      storeId,
-      appliedVersion: typeof store.appliedVersion === 'number' ? store.appliedVersion : 0,
-      appliedAt: typeof store.appliedAt === 'string' ? new Date(store.appliedAt) : null,
-      online: store.online !== false,
-    }];
-  }) : [];
-  return {
-    activeVersion: typeof payload.activeVersion === 'number' ? payload.activeVersion : 0,
-    learning: payload.learning === true,
-    learningPaused: payload.learningPaused === true,
-    stores,
-  };
-}
-
 function describeResult(value: unknown, fallback: string) {
   if (!value || typeof value !== 'object') return fallback;
   const result = value as Record<string, unknown>;
+  if (typeof result.approvalRequired === 'boolean') return result.approvalRequired ? 'Approval is required before a version goes live.' : 'Automatic promotion is enabled.';
+  const versionName = typeof result.version === 'number' ? `Policy v${result.version}` : 'Version';
+  if (typeof result.approved === 'boolean') return result.approved ? `${versionName} approved.` : 'No version was approved.';
+  if (typeof result.rejected === 'boolean') return result.rejected ? `${versionName} rejected.` : 'No version was rejected.';
+  if (typeof result.conversationsDeleted === 'number') return `${result.conversationsDeleted} conversations deleted; ${result.incidentsRedacted} incidents redacted.`;
+  if ('refused' in result) return result.refused === true && result.code === 121 ? 'Atlas refused it: code 121' : 'Validator rejection was not confirmed.';
   if (typeof result.reason === 'string') return result.reason;
   if (result.kind === 'flash' && result.status === 'running') return 'Flash sale running. Results will appear automatically.';
   if (typeof result.evaluationId === 'string') return `Evaluation ${result.evaluationId} started`;
@@ -210,8 +191,8 @@ export default function OpsPage() {
     path: string,
     body?: Record<string, unknown>,
     onSuccess?: (result: unknown) => void,
-  ) {
-    if (!password || busy) return;
+  ): Promise<ActionOutcome> {
+    if (!password || busy) return { ok: false, error: 'Wait for the current action to finish.' };
     setBusy(key);
     setNotice(`${label}…`);
     addLog(`${label} started`);
@@ -226,22 +207,36 @@ export default function OpsPage() {
       addLog(message, 'good');
       onSuccess?.(result);
       await refreshOverview();
+      return { ok: true, result, message };
     } catch (error) {
       if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
         setUnlocked(false);
         setPassword('');
         setNotice('Password rejected.');
         addLog('Password rejected', 'bad');
+        return { ok: false, error: 'Password rejected.' };
       } else {
         const message = error instanceof ApiError && error.code === 'flash_busy'
           ? 'A flash sale is already running. Wait for its result.'
+          : error instanceof ApiError && error.status === 501 ? 'This control is not available on this server yet.'
           : `${label} failed. Try again.`;
         setNotice(message);
         addLog(message, 'bad');
+        return { ok: false, error: message };
       }
     } finally {
       setBusy(null);
     }
+  }
+
+  async function runGovernance(action: GovernanceAction): Promise<ActionOutcome> {
+    const outcome = await runAction(action.key, action.label, `/api/ops/${action.key}`, action.body);
+    if (outcome.ok && outcome.result && typeof outcome.result === 'object') {
+      const result = outcome.result as Record<string, unknown>;
+      if (typeof result.approvalRequired === 'boolean') setState((current) => ({ ...current, approvalRequired: result.approvalRequired as boolean }));
+      if (result.approved === true || result.rejected === true) setState((current) => ({ ...current, awaitingApproval: null }));
+    }
+    return outcome;
   }
 
   if (!unlocked) {
@@ -332,6 +327,11 @@ export default function OpsPage() {
               </div>
             </div>
             <p className="ops-notice" aria-live="polite">{notice}</p>
+          </ConsolePanel>
+
+          <ConsolePanel title="Memory governance" aside={state.awaitingApproval ? 'Awaiting approval' : state.approvalRequired ? 'Approval required' : 'Automatic'} tone={state.awaitingApproval ? 'warning' : undefined}>
+            <GovernancePanel approvalRequired={state.approvalRequired === true} pending={state.awaitingApproval}
+              disabled={busy !== null} perform={runGovernance} />
           </ConsolePanel>
 
           <ConsolePanel title="Demo actions" aside="Use in order">

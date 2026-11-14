@@ -21,6 +21,9 @@ const evalSchema = z.object({
 const optionalStoreSchema = z.object({ storeId: storeIdSchema.optional() }).strict();
 const storeSchema = z.object({ storeId: storeIdSchema }).strict();
 const onlineSchema = z.object({ online: z.boolean() }).strict();
+const approvalSchema = z.object({ on: z.boolean() }).strict();
+const rejectionSchema = z.object({ reason: z.string().trim().min(1).max(500).optional() }).strict();
+const forgetShopperSchema = z.object({ shopperId: z.string().trim().min(1).max(200) }).strict();
 
 const STORE_ORDER: StoreId[] = ['queen', 'yonge', 'scarborough'];
 const AGENT_ERROR_STATUS: Record<AgentError['code'], number> = {
@@ -98,6 +101,37 @@ export function createApiRouter({ store, agent, db, opsAutomation, flash, resetD
   });
 
   router.use('/ops', requireOpsPassword);
+
+  router.post('/ops/approval', async (req, res) => {
+    const input = approvalSchema.safeParse(req.body);
+    if (!input.success) return invalid(res);
+    if (!agent.setApprovalRequired) return notImplemented(res);
+    sendResult(res, await agent.setApprovalRequired(input.data.on));
+  });
+
+  router.post('/ops/approve', async (_req, res) => {
+    if (!agent.approve) return notImplemented(res);
+    sendResult(res, await agent.approve());
+  });
+
+  router.post('/ops/reject', async (req, res) => {
+    const input = rejectionSchema.safeParse(req.body ?? {});
+    if (!input.success) return invalid(res);
+    if (!agent.reject) return notImplemented(res);
+    sendResult(res, await agent.reject(input.data.reason));
+  });
+
+  router.post('/ops/forget-shopper', async (req, res) => {
+    const input = forgetShopperSchema.safeParse(req.body);
+    if (!input.success) return invalid(res);
+    if (!agent.forgetShopper) return notImplemented(res);
+    sendResult(res, await agent.forgetShopper(input.data.shopperId));
+  });
+
+  router.post('/ops/prove-memory-rules', async (_req, res) => {
+    if (!agent.proveMemoryRules) return notImplemented(res);
+    sendResult(res, await agent.proveMemoryRules());
+  });
 
   router.post('/ops/reset', async (_req, res) => {
     if (flashJobs?.running()) return res.status(409).json({ error: 'flash_busy' });
@@ -200,6 +234,10 @@ function invalid(res: Response) {
 
 function unavailable(res: Response) {
   return res.status(503).json({ error: 'unavailable' });
+}
+
+function notImplemented(res: Response) {
+  return res.status(501).json({ error: 'not_implemented' });
 }
 
 function sendResult(res: Response, result: unknown) {
