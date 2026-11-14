@@ -11,6 +11,7 @@ The `pre-event` tag marks the last commit made before the event. Up to that tag,
 - `data/`: the store data (catalog, discount codes and members) and the test cases (40 dev and 120 held-out), written before any Bodega code;
 - a generic app skeleton with no Bodega logic: the dependencies and config, an Express server with a health check and an Atlas client, and empty React pages;
 - `BACKLOG.md`, our task plan, and `.env.example`, the names of the settings.
+- `design/`: Bodega's design system (brand book, tokens, fonts, logos and icons), made by Mahyar before the event and imported at 10:45; the components were built at the event.
 
 Everything after the tag is built on Nov 14, 2026, from 10:45: [see the changes](https://github.com/mahyar-jbr/Bodega/compare/pre-event...main).
 

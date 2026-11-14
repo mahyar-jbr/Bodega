@@ -1,0 +1,284 @@
+/* Bodega design system tokens: generated from tokens.json, made before the event (Nov 13, 2026) */
+
+/* Fonts: both variable, weights 100 to 900 (SIL OFL, licences in fonts/) */
+@font-face {
+  font-family: "Geist";
+  src: url("./fonts/Geist-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("./fonts/GeistMono-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Tokens that are the same in both themes */
+:root {
+  /* Reference palette: the theme colours below point at these */
+  --navy-950: #000f17;
+  --navy-900: #001e2b;
+  --slate-800: #0d1f28;
+  --slate-600: #3d4f5b;
+  --green-500: #00ed64;
+  --green-700: #00684a;
+
+  /* Type families */
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Spacing: 4px base. Stage screens use the same steps at their 1920px design size. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-24: 96px;
+
+  /* Radius grows with the size of the thing; every control is a pill. */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-2xl: 36px;
+  --radius-pill: 999px;
+
+  /* Blur: Backdrop blur for glass. Static panels only. */
+  --blur-sm: 12px;
+  --blur-md: 24px;
+  --blur-lg: 40px;
+
+  /* Durations: Quick for feedback, long and soft for story beats. */
+  --dur-press: 120ms;
+  --dur-fast: 180ms;
+  --dur-base: 280ms;
+  --dur-panel: 480ms;
+  --dur-scene: 640ms;
+  --dur-tick: 1000ms;
+  --dur-sweep: 1100ms;
+  --dur-loop: 2400ms;
+  --dur-stagger: 60ms;
+
+  /* Easings: Everything settles; nothing bounces. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* Layout: Design sizes and floors every screen is built against. */
+  --stage-width: 1920px;
+  --stage-height: 1080px;
+  --phone-width: 390px;
+  --phone-height: 844px;
+  --tap-min: 44px;
+  --stage-text-min: 26px;
+
+  /* Type scale: size, line height, weight and tracking for each type style */
+  /* Stage: Projected at 1920 by 1080 and read from the back of the room. Big numbers are calm (weight 500, tight tracking, tabular). Nothing under 26px. */
+  --stage-hero-font-size: 200px;
+  --stage-hero-line-height: 0.9;
+  --stage-hero-font-weight: 500;
+  --stage-hero-letter-spacing: -0.05em;
+  --stage-display-font-size: 104px;
+  --stage-display-line-height: 0.86;
+  --stage-display-font-weight: 500;
+  --stage-display-letter-spacing: -0.045em;
+  --stage-number-font-size: 64px;
+  --stage-number-line-height: 1;
+  --stage-number-font-weight: 500;
+  --stage-number-letter-spacing: -0.035em;
+  --stage-title-font-size: 48px;
+  --stage-title-line-height: 1.1;
+  --stage-title-font-weight: 560;
+  --stage-title-letter-spacing: -0.03em;
+  --stage-heading-font-size: 36px;
+  --stage-heading-line-height: 1.15;
+  --stage-heading-font-weight: 560;
+  --stage-heading-letter-spacing: -0.02em;
+  --stage-body-font-size: 30px;
+  --stage-body-line-height: 1.35;
+  --stage-body-font-weight: 450;
+  --stage-body-letter-spacing: -0.01em;
+  --stage-callout-font-size: 28px;
+  --stage-callout-line-height: 1.2;
+  --stage-callout-font-weight: 560;
+  --stage-callout-letter-spacing: -0.005em;
+  --stage-label-font-size: 26px;
+  --stage-label-line-height: 1.3;
+  --stage-label-font-weight: 500;
+  --stage-label-letter-spacing: 0em;
+  /* Interface: Phone shop and ops console. Chat body is 16px; nothing under 12px. */
+  --ui-display-font-size: 40px;
+  --ui-display-line-height: 44px;
+  --ui-display-font-weight: 600;
+  --ui-display-letter-spacing: -0.04em;
+  --ui-title-font-size: 28px;
+  --ui-title-line-height: 32px;
+  --ui-title-font-weight: 600;
+  --ui-title-letter-spacing: -0.03em;
+  --ui-heading-font-size: 20px;
+  --ui-heading-line-height: 26px;
+  --ui-heading-font-weight: 600;
+  --ui-heading-letter-spacing: -0.02em;
+  --ui-headline-font-size: 17px;
+  --ui-headline-line-height: 22px;
+  --ui-headline-font-weight: 600;
+  --ui-headline-letter-spacing: -0.02em;
+  --ui-body-font-size: 16px;
+  --ui-body-line-height: 23px;
+  --ui-body-font-weight: 450;
+  --ui-body-letter-spacing: -0.006em;
+  --ui-callout-font-size: 15px;
+  --ui-callout-line-height: 20px;
+  --ui-callout-font-weight: 550;
+  --ui-callout-letter-spacing: -0.005em;
+  --ui-subhead-font-size: 14px;
+  --ui-subhead-line-height: 20px;
+  --ui-subhead-font-weight: 450;
+  --ui-subhead-letter-spacing: 0em;
+  --ui-caption-font-size: 13px;
+  --ui-caption-line-height: 18px;
+  --ui-caption-font-weight: 450;
+  --ui-caption-letter-spacing: 0em;
+  --ui-micro-font-size: 12px;
+  --ui-micro-line-height: 16px;
+  --ui-micro-font-weight: 550;
+  --ui-micro-letter-spacing: 0.01em;
+  /* Receipt and codes: Geist Mono only where the real world is monospaced: receipts, discount codes, order numbers, the ops log. */
+  --mono-stage-font-size: 26px;
+  --mono-stage-line-height: 32px;
+  --mono-stage-font-weight: 450;
+  --mono-stage-letter-spacing: 0em;
+  --mono-code-font-size: 14px;
+  --mono-code-line-height: 20px;
+  --mono-code-font-weight: 500;
+  --mono-code-letter-spacing: 0.01em;
+  --mono-receipt-font-size: 13px;
+  --mono-receipt-line-height: 19px;
+  --mono-receipt-font-weight: 420;
+  --mono-receipt-letter-spacing: 0.01em;
+}
+
+/* Stage theme (the default): night navy, for the projector, the phones and the console */
+:root,
+[data-theme="stage"] {
+  /* Colour */
+  --canvas: var(--navy-950);
+  --canvas-deep: #000a10;
+  --glow: var(--navy-900);
+  --glass-tint: #03202b99;
+  --glass-sheen: #ffffff0d;
+  --glass-sheen-strong: #ffffff17;
+  --glass-edge: #ffffff14;
+  --glass-highlight: #ffffff1f;
+  --line: #ffffff12;
+  --line-strong: #ffffff24;
+  --control-edge: #ffffff61;
+  --ink: #eef2f1;
+  --ink-2: #a4b1b6;
+  --ink-3: #82929a;
+  --ink-faint: #3d4f5b;
+  --brand: var(--green-500);
+  --brand-ink: var(--green-500);
+  --brand-pressed: #00c853;
+  --brand-soft: #00ed641a;
+  --on-brand: var(--navy-900);
+  --loss: #f97676;
+  --loss-soft: #f976761a;
+  --learning: #f2c36a;
+  --learning-soft: #f2c36a1a;
+  --immune: var(--brand-ink);
+  --served: #8ec5ec;
+  --on-loss: var(--navy-900);
+  --store-queen: #baaee3;
+  --store-yonge: #d9c099;
+  --store-scarborough: #e1a6a9;
+  --paper: #f6f8f7;
+  --paper-ink: var(--navy-900);
+  --paper-ink-2: #4a5a63;
+  --qr-ink: var(--navy-900);
+  --scrim: #000a10b3;
+
+  /* Shadow: Depth comes from a faint lit edge and long soft shadows. No coloured glows. */
+  --shadow-glass: inset 0 1px 0 0 #ffffff0f, 0 1px 2px 0 #00000059, 0 30px 60px -30px #000000b3;
+  --shadow-float: inset 0 1px 0 0 #ffffff14, 0 40px 80px -24px #000000d9, 0 8px 24px -12px #00000099;
+  --shadow-press: inset 0 1px 3px 0 #00000080;
+  --focus-ring: 0 0 0 2px #000f17, 0 0 0 4px #00ed64;
+}
+
+/* Daylight theme: cool off-white, for the judging table, docs and the README */
+[data-theme="daylight"] {
+  /* Colour */
+  --canvas: #f4f6f5;
+  --canvas-deep: #e9eeec;
+  --glow: #e3f1ec;
+  --glass-tint: #ffffffc7;
+  --glass-sheen: #ffffff99;
+  --glass-sheen-strong: #ffffffe6;
+  --glass-edge: #0b1a2114;
+  --glass-highlight: #ffffff;
+  --line: #0b1a2112;
+  --line-strong: #0b1a2124;
+  --control-edge: #0b1a2185;
+  --ink: #0b1a21;
+  --ink-2: #44545c;
+  --ink-3: #5f6f77;
+  --ink-faint: #a9b4b9;
+  --brand: var(--green-500);
+  --brand-ink: var(--green-700);
+  --brand-pressed: var(--green-700);
+  --brand-soft: #ddf7e8;
+  --on-brand: var(--navy-900);
+  --loss: #c2343b;
+  --loss-soft: #fbe9e9;
+  --learning: #8a5a00;
+  --learning-soft: #fbf1dd;
+  --immune: var(--brand-ink);
+  --served: #22639a;
+  --on-loss: #ffffff;
+  --store-queen: #6b5bb0;
+  --store-yonge: #85693a;
+  --store-scarborough: #a44f59;
+  --paper: #ffffff;
+  --paper-ink: var(--navy-900);
+  --paper-ink-2: #4a5a63;
+  --qr-ink: var(--navy-900);
+  --scrim: #0b1a2152;
+
+  /* Shadow: Depth comes from a faint lit edge and long soft shadows. No coloured glows. */
+  --shadow-glass: inset 0 1px 0 0 #ffffff, 0 1px 2px 0 #0b1a210f, 0 24px 48px -28px #0b1a2124;
+  --shadow-float: inset 0 1px 0 0 #ffffff, 0 32px 80px -32px #0b1a2159, 0 8px 24px -12px #0b1a2133;
+  --shadow-press: inset 0 1px 3px 0 #0b1a2126;
+  --focus-ring: 0 0 0 2px #f4f6f5, 0 0 0 4px #00684a;
+}
+
+/* Type styles: one class per style, as 2-build-spec.md lists them */
+.stage-hero { font-family: var(--font-sans); font-size: var(--stage-hero-font-size); line-height: var(--stage-hero-line-height); font-weight: var(--stage-hero-font-weight); letter-spacing: var(--stage-hero-letter-spacing); }
+.stage-display { font-family: var(--font-sans); font-size: var(--stage-display-font-size); line-height: var(--stage-display-line-height); font-weight: var(--stage-display-font-weight); letter-spacing: var(--stage-display-letter-spacing); }
+.stage-number { font-family: var(--font-sans); font-size: var(--stage-number-font-size); line-height: var(--stage-number-line-height); font-weight: var(--stage-number-font-weight); letter-spacing: var(--stage-number-letter-spacing); }
+.stage-title { font-family: var(--font-sans); font-size: var(--stage-title-font-size); line-height: var(--stage-title-line-height); font-weight: var(--stage-title-font-weight); letter-spacing: var(--stage-title-letter-spacing); }
+.stage-heading { font-family: var(--font-sans); font-size: var(--stage-heading-font-size); line-height: var(--stage-heading-line-height); font-weight: var(--stage-heading-font-weight); letter-spacing: var(--stage-heading-letter-spacing); }
+.stage-body { font-family: var(--font-sans); font-size: var(--stage-body-font-size); line-height: var(--stage-body-line-height); font-weight: var(--stage-body-font-weight); letter-spacing: var(--stage-body-letter-spacing); }
+.stage-callout { font-family: var(--font-sans); font-size: var(--stage-callout-font-size); line-height: var(--stage-callout-line-height); font-weight: var(--stage-callout-font-weight); letter-spacing: var(--stage-callout-letter-spacing); }
+.stage-label { font-family: var(--font-sans); font-size: var(--stage-label-font-size); line-height: var(--stage-label-line-height); font-weight: var(--stage-label-font-weight); letter-spacing: var(--stage-label-letter-spacing); }
+.ui-display { font-family: var(--font-sans); font-size: var(--ui-display-font-size); line-height: var(--ui-display-line-height); font-weight: var(--ui-display-font-weight); letter-spacing: var(--ui-display-letter-spacing); }
+.ui-title { font-family: var(--font-sans); font-size: var(--ui-title-font-size); line-height: var(--ui-title-line-height); font-weight: var(--ui-title-font-weight); letter-spacing: var(--ui-title-letter-spacing); }
+.ui-heading { font-family: var(--font-sans); font-size: var(--ui-heading-font-size); line-height: var(--ui-heading-line-height); font-weight: var(--ui-heading-font-weight); letter-spacing: var(--ui-heading-letter-spacing); }
+.ui-headline { font-family: var(--font-sans); font-size: var(--ui-headline-font-size); line-height: var(--ui-headline-line-height); font-weight: var(--ui-headline-font-weight); letter-spacing: var(--ui-headline-letter-spacing); }
+.ui-body { font-family: var(--font-sans); font-size: var(--ui-body-font-size); line-height: var(--ui-body-line-height); font-weight: var(--ui-body-font-weight); letter-spacing: var(--ui-body-letter-spacing); }
+.ui-callout { font-family: var(--font-sans); font-size: var(--ui-callout-font-size); line-height: var(--ui-callout-line-height); font-weight: var(--ui-callout-font-weight); letter-spacing: var(--ui-callout-letter-spacing); }
+.ui-subhead { font-family: var(--font-sans); font-size: var(--ui-subhead-font-size); line-height: var(--ui-subhead-line-height); font-weight: var(--ui-subhead-font-weight); letter-spacing: var(--ui-subhead-letter-spacing); }
+.ui-caption { font-family: var(--font-sans); font-size: var(--ui-caption-font-size); line-height: var(--ui-caption-line-height); font-weight: var(--ui-caption-font-weight); letter-spacing: var(--ui-caption-letter-spacing); }
+.ui-micro { font-family: var(--font-sans); font-size: var(--ui-micro-font-size); line-height: var(--ui-micro-line-height); font-weight: var(--ui-micro-font-weight); letter-spacing: var(--ui-micro-letter-spacing); }
+.mono-stage { font-family: var(--font-mono); font-size: var(--mono-stage-font-size); line-height: var(--mono-stage-line-height); font-weight: var(--mono-stage-font-weight); letter-spacing: var(--mono-stage-letter-spacing); }
+.mono-code { font-family: var(--font-mono); font-size: var(--mono-code-font-size); line-height: var(--mono-code-line-height); font-weight: var(--mono-code-font-weight); letter-spacing: var(--mono-code-letter-spacing); }
+.mono-receipt { font-family: var(--font-mono); font-size: var(--mono-receipt-font-size); line-height: var(--mono-receipt-line-height); font-weight: var(--mono-receipt-font-weight); letter-spacing: var(--mono-receipt-letter-spacing); }
