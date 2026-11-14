@@ -66,9 +66,9 @@ export function LearningPanel({ data }: { data: LearningData }) {
       <div className="bs-learn-cols">
         <div className="bs-learn-col" data-step={steps[0]}>
           <div className="stage-label bs-col-label">What happened</div>
-          <div className="stage-body">{data.incident.summary}</div>
-          <div className="stage-label bs-quiet bs-detail" style={{ marginTop: 8 }}>{data.incident.detail}</div>
-          {data.incident.lostCents > 0 && <div className="stage-number bd-num" style={{ color: 'var(--loss)', marginTop: 20 }}>{'−'}{money(data.incident.lostCents)}</div>}
+          <div className="stage-body bs-clamp-3">{data.incident.summary}</div>
+          <div className="stage-label bs-quiet bs-detail bs-clamp-2" style={{ marginTop: 8 }}>{data.incident.detail}</div>
+          {data.incident.lostCents > 0 && <div className="stage-number bd-num" style={{ color: 'var(--loss)', marginTop: 12 }}>{'−'}{money(data.incident.lostCents)}</div>}
         </div>
         <div className="bs-learn-col" data-step={steps[1]}>
           <div className="stage-label bs-col-label">New guardrail, in plain words</div>
