@@ -1,7 +1,7 @@
 # Bodega
 
 <p align="center">
-  <img src="docs/media/hero.png" width="100%" alt="Bodega's big screen during a live learning cycle: three store tiles, the learning panel testing a new guardrail on 120 held-out cases with green dots for scams stopped and blue for honest customers served, and the live feed of cons">
+  <img src="docs/media/stage.png" width="100%" alt="The presenting laptop's stage view: the big screen with three conned or open stores, the tricks tried so far and the live feed, beside a phone-size shop window with four shopper tabs">
 </p>
 
 **Herd immunity for AI store agents.** A con that works once at one store is blocked at every store within seconds, after the fix is proven on 120 held-out cases with the same model, while honest customers still get served. The memory behind it is governed: who reads it, how long it lives and how it's taken back are rules, not promises.
@@ -39,10 +39,6 @@ Shop agents like this get talked into giving stock away: fake codes, fake member
 <p align="center"><img src="docs/media/phone-shop.png" width="360" alt="The Queen St shop on a phone: the shopkeeper greets Lucky Fox 52, sells one iced tea for $2.50 and prints receipt Q-1013, with the wallet at $17.50 and Policy v0 in the header"></p>
 
 <p align="center"><em>A shop on a phone: chat with the shopkeeper, pay with play credits, get a receipt.</em></p>
-
-<p align="center"><img src="docs/media/stage.png" width="100%" alt="The presenting laptop's stage view: the big screen with three conned or open stores, the tricks tried so far and the live feed, beside a phone-size shop window with four shopper tabs"></p>
-
-<p align="center"><em>The stage view the room watches: the big screen beside a live shop window.</em></p>
 
 ## Results
 
