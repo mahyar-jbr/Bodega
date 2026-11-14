@@ -33,7 +33,7 @@ export interface LearningRunDoc {
   cons: string[];
   phase: LearningPhase;
   attempts: { attempt: 1 | 2; version: number; title: string; rules: string[]; verdict: GateResult['verdict'] | null;
-    reasons: string[]; evaluationId: string | null; learnMs: number }[];
+    reasons: string[]; evaluationId: string | null; learnMs: number; model: string }[];
   startedAt: Date;
   finishedAt: Date | null;
   error: string | null;
@@ -57,9 +57,41 @@ export interface LearnerDeps {
   delayMs?: number;
 }
 
+// The learner (not the shopkeeper, whose model never changes) survives an overloaded API on stage:
+// a failed call is retried once after 2 s, and if Opus is still overloaded, the rest of that cycle
+// runs on Sonnet. The model used is recorded with each attempt.
 let client: Anthropic | undefined;
-const anthropic = () => (client ??= new Anthropic({ maxRetries: 3, timeout: 120_000 }));
+const anthropic = () => (client ??= new Anthropic({ maxRetries: 0, timeout: 120_000 }));
 const learnerModel = () => process.env.LEARNER_MODEL?.trim() || 'claude-opus-5-5';
+export const FALLBACK_LEARNER_MODEL = 'claude-sonnet-5-5';
+const RETRY_DELAY_MS = 2_000;
+
+/** One cycle's model: starts on the learner model, and moves to the fallback for the rest of the cycle. */
+export interface LearnerCall { model: string; client?: Pick<Anthropic, 'messages'>; retryDelayMs?: number }
+
+function isOverloaded(error: unknown): boolean {
+  return error instanceof Anthropic.APIError && (error.status === 529 || /overload/i.test(error.message));
+}
+function isRetryable(error: unknown): boolean {
+  return error instanceof Anthropic.APIConnectionError || (error instanceof Anthropic.APIError && (error.status === 429 || (error.status ?? 0) >= 500));
+}
+
+async function parseWithRetry<T>(call: LearnerCall, send: (model: string) => Promise<T>): Promise<T> {
+  try {
+    return await send(call.model);
+  } catch (error) {
+    if (!isRetryable(error)) throw error;
+    await new Promise((r) => setTimeout(r, call.retryDelayMs ?? RETRY_DELAY_MS));
+    try {
+      return await send(call.model);
+    } catch (again) {
+      if (!isOverloaded(again) || call.model === FALLBACK_LEARNER_MODEL) throw again;
+      console.error(`learner: ${call.model} is overloaded; this cycle continues on ${FALLBACK_LEARNER_MODEL}`);
+      call.model = FALLBACK_LEARNER_MODEL;
+      return send(call.model);
+    }
+  }
+}
 export const hasLearnerKey = () => Boolean(process.env.ANTHROPIC_API_KEY?.trim());
 
 function describeVersion(v: GuardrailVersion): string {
@@ -82,8 +114,9 @@ export function describeGate(version: number, r: GateResult): string {
 }
 
 /** One proposal from Opus, validated (with one repair round). Throws when it stays invalid. */
-export async function proposeVersion(input: { active: GuardrailVersion; cons: ConDoc[]; knownCons: Set<string>; nextVersion: number; feedback?: string | null }):
-  Promise<{ title: string; rules: Rule[]; learnMs: number }> {
+export async function proposeVersion(input: { active: GuardrailVersion; cons: ConDoc[]; knownCons: Set<string>; nextVersion: number; feedback?: string | null },
+  call: LearnerCall = { model: learnerModel() }): Promise<{ title: string; rules: Rule[]; learnMs: number; model: string }> {
+  const api = call.client ?? anthropic();
   const started = Date.now();
   const messages: Anthropic.MessageParam[] = [{
     role: 'user',
@@ -91,13 +124,13 @@ export async function proposeVersion(input: { active: GuardrailVersion; cons: Co
       ...(input.feedback ? ['', input.feedback] : []), '', 'Write the complete next version.'].join('\n'),
   }];
   for (let round = 1; round <= 2; round++) {
-    const response = await anthropic().messages.parse({
-      model: learnerModel(),
+    const response = await parseWithRetry(call, (model) => api.messages.parse({
+      model,
       max_tokens: 16_000,
       system: LEARNER_SYSTEM,
       output_config: { effort: 'medium', format: zodOutputFormat(LearnedVersion) },
       messages,
-    });
+    }));
     if (response.stop_reason === 'refusal') throw new Error('the learner model declined');
     const parsed = response.parsed_output;
     let problems: string[];
@@ -112,7 +145,7 @@ export async function proposeVersion(input: { active: GuardrailVersion; cons: Co
       if (missed.length) problems.push(`these new cons are not covered by any rule: ${missed.join(', ')}`);
       // The model doesn't know the version number it will get: drop a "v1:" it may have guessed.
       const title = parsed.title.trim().replace(/^v\d+\s*[:\-–—]\s*/i, '').slice(0, 120);
-      if (problems.length === 0) return { title, rules, learnMs: Date.now() - started };
+      if (problems.length === 0) return { title, rules, learnMs: Date.now() - started, model: call.model };
     }
     if (round === 2) throw new Error(`invalid version after a repair round: ${problems.slice(0, 4).join('; ')}`);
     messages.push({ role: 'assistant', content: response.content }, { role: 'user', content: `That version has problems:\n${problems.map((p) => `- ${p}`).join('\n')}\nWrite the complete corrected version.` });
@@ -200,12 +233,13 @@ export function createLearner({ db, store, conMemory, gate, delayMs = LEARN_DELA
       await runs.insertOne(run);
       const knownCons = new Set([...cons.map((c) => c._id), ...active.rules.flatMap((r) => r.cons)]);
       let feedback: string | null = null;
+      const call: LearnerCall = { model: learnerModel() };   // a fallback lasts for this cycle only
 
       for (const attempt of [1, 2] as const) {
-        const proposal = await proposeVersion({ active, cons, knownCons, nextVersion: 1, feedback });
+        const proposal = await proposeVersion({ active, cons, knownCons, nextVersion: 1, feedback }, call);
         const saved = await saveVersion(db, { rules: proposal.rules, title: proposal.title, source: 'learner', parentVersion: active.version });
         const entry = { attempt, version: saved.version, title: saved.title, rules: saved.rules.map((r) => r.title),
-          verdict: null, reasons: [], evaluationId: null, learnMs: proposal.learnMs };
+          verdict: null, reasons: [], evaluationId: null, learnMs: proposal.learnMs, model: proposal.model };
         await runs.updateOne({ _id: run._id }, { $set: { phase: 'gating' }, $push: { attempts: entry } });
         // One gate at a time (the gate demo may be running): wait for it rather than fail.
         for (let i = 0; i < 90 && gateRunning() !== null; i++) await new Promise((r) => setTimeout(r, 1_000));
