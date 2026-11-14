@@ -9,11 +9,11 @@ import { BigScreen } from './ScreenPage';
 import { StageOps } from './StageOps';
 
 const TABS = [
-  { key: 'q1', label: 'Queen', src: '/s/queen?as=q1' },
-  { key: 'q2', label: 'Queen 2', src: '/s/queen?as=q2' },
-  { key: 'y1', label: 'Yonge', src: '/s/yonge?as=y1' },
-  { key: 'y2', label: 'Yonge 2', src: '/s/yonge?as=y2' },
-  { key: 's1', label: 'Scarborough', src: '/s/scarborough?as=s1' },
+  { key: 'q1', label: 'Queen', name: 'Queen St, shopper 1', src: '/s/queen?as=q1' },
+  { key: 'q2', label: 'Queen 2', name: 'Queen St, shopper 2', src: '/s/queen?as=q2' },
+  { key: 'y1', label: 'Yonge', name: 'Yonge St, shopper 1', src: '/s/yonge?as=y1' },
+  { key: 'y2', label: 'Yonge 2', name: 'Yonge St, shopper 2', src: '/s/yonge?as=y2' },
+  { key: 's1', label: 'Scarb.', name: 'Scarborough', src: '/s/scarborough?as=s1' },
 ] as const;
 
 const PHONE_W = 390, PHONE_H = 844, TABS_H = 70, GUTTER = 24;
@@ -47,17 +47,18 @@ export default function StagePage() {
       style={{ gridTemplateColumns: `1fr ${colWidth}px` }}>
       <div className="st-screen"><BigScreen /></div>
       <aside className="st-phone-col" aria-label="Shop window">
-        <div className="st-tabs" role="tablist" style={{ height: TABS_H - 14 }}>
+        {/* The tabs share the phone's width in equal pills, so they fit whatever the window. */}
+        <div className="st-tabs" role="tablist" style={{ height: TABS_H - 14, width: PHONE_W * scale + 20, fontSize: Math.max(11, Math.min(14, (PHONE_W * scale + 20) / 25)) }}>
           {TABS.map((t) => (
-            <button key={t.key} role="tab" aria-selected={active === t.key} className="st-tab ui-callout"
+            <button key={t.key} role="tab" aria-selected={active === t.key} className="st-tab" title={t.name} aria-label={t.name}
               onClick={() => { setActive(t.key); requestAnimationFrame(() => document.querySelector<HTMLIFrameElement>(`iframe[data-tab="${t.key}"]`)?.focus()); }}>
-              {t.label}
+              <span>{t.label}</span>
             </button>
           ))}
         </div>
         <div className="st-phone" style={{ width: PHONE_W * scale, height: PHONE_H * scale }}>
           {TABS.map((t) => (
-            <iframe key={t.key} data-tab={t.key} title={`${t.label} shop`} src={t.src}
+            <iframe key={t.key} data-tab={t.key} title={`${t.name} shop`} src={t.src}
               onLoad={(e) => onFrameLoad(e.currentTarget)}
               className="st-frame" data-active={active === t.key}
               style={{ width: PHONE_W, height: PHONE_H, transform: `scale(${scale})` }} />

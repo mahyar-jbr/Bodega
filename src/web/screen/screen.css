@@ -264,13 +264,16 @@
 /* /stage: the big screen on the left, a phone-size shop window on the right */
 .st-root { display: grid; grid-template-rows: 100%; }
 .st-screen { position: relative; min-width: 0; }
-.st-phone-col { display: flex; flex-direction: column; align-items: center; padding: 24px 24px 24px 0; gap: 0; }
-.st-tabs { display: flex; gap: 4px; align-items: center; margin-bottom: 14px; }
+.st-phone-col { display: flex; flex-direction: column; align-items: center; padding: 24px 24px 24px 0; gap: 0; min-height: 0; overflow: hidden; }
+.st-phone { flex: 0 0 auto; }
+.st-tabs { flex: 0 0 auto; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; align-items: center; margin-bottom: 14px; max-width: 100%; }
 .st-tab {
-  border: 1px solid var(--control-edge); background: transparent; color: var(--ink-2);
-  border-radius: var(--radius-pill); padding: 6px 9px; cursor: pointer; white-space: nowrap;
+  min-width: 0; border: 1px solid var(--control-edge); background: transparent; color: var(--ink-2);
+  border-radius: var(--radius-pill); padding: 6px 2px; cursor: pointer; white-space: nowrap;
+  font: 500 1em/1.2 var(--font-sans); letter-spacing: -0.01em;
   transition: background var(--dur-fast), color var(--dur-fast);
 }
+.st-tab > span { display: block; overflow: hidden; text-overflow: ellipsis; }
 .st-tab[aria-selected="true"] { background: var(--glass-sheen-strong); color: var(--ink); border-color: transparent; }
 .st-tab:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .st-phone {
