@@ -449,7 +449,7 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
     ...orders.filter((o) => !conned.has(o.number)).map((o) => {
       const lines = (o.lines as { sku: string; qty: number }[] | undefined) ?? [];
       const at = ` at ${STORE_NAME[o.storeId as StoreId]}`;
-      const name = (l: { sku: string; qty: number }) => `${l.qty > 1 ? `${l.qty} \u00d7 ` : ''}${productNames.get(l.sku) ?? l.sku}`;
+      const name = (l: { sku: string; qty: number }) => `${l.qty > 1 ? `${l.qty} \u00d7 ` : ''}${feedName(productNames.get(l.sku) ?? l.sku)}`;
       const both = lines.length === 2 ? `${name(lines[0])}, ${name(lines[1])}${at}` : '';
       const what = lines.length === 0 ? `An order${at}`
         : lines.length === 1 ? `${name(lines[0])}${at}`
@@ -544,4 +544,10 @@ function operatorVerdict(g: GuardrailDoc | undefined): string {
 function rejectedRecently(g: GuardrailDoc | undefined): boolean {
   const at = (g as VersionDecision | undefined)?.rejectedAt;
   return !!at && Date.now() - new Date(at).getTime() < 60_000;
+}
+
+/** A product's name for a feed line: "Limited Bodega hoodie" -> "Hoodie", "Large coffee" -> "Coffee". */
+function feedName(name: string): string {
+  const short = name.replace(/^(limited |large )?(bodega )?/i, '');
+  return short.charAt(0).toUpperCase() + short.slice(1);
 }
