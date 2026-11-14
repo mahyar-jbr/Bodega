@@ -1,4 +1,5 @@
 import '../server/env';
+import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll } from 'vitest';
 import { closeDb, dbName, getClient } from '../shared/db';
 import type { StoreId } from '../shared/contract';
@@ -6,7 +7,8 @@ import { storeContractTests } from '../shared/store-contract';
 import { AtlasStore } from './atlas-store';
 import { catalogDocuments, seedDatabase, STORE_SEEDS } from './seed';
 
-const db = getClient().db(`${dbName()}_contract`);
+const testRunId = `${process.pid}_${randomBytes(4).toString('hex')}`;
+const db = getClient().db(`${dbName()}_contract_${testRunId}`);
 
 beforeAll(async () => {
   await seedDatabase(db);
@@ -14,11 +16,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await Promise.all([
-    db.collection('shoppers').deleteMany({}),
-    db.collection('orders').deleteMany({}),
-    db.collection('ledger').deleteMany({}),
-    db.collection('counters').deleteMany({}),
-  ]);
+    'products', 'codes', 'members', 'stores', 'shoppers', 'orders', 'ledger', 'counters',
+  ].map((name) => db.collection(name).deleteMany({})));
   await closeDb();
 });
 
