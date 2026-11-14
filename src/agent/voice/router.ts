@@ -7,9 +7,11 @@ import express, { Router } from 'express';
 import { AgentError, type AgentApi, type ChatErrorCode } from '../../shared/contract';
 import { isStoreId } from '../../shared/store-data';
 import { synthesize, transcribe, voiceConfig, VoiceError, type FetchLike } from './elevenlabs';
+import { brokenRecording, uploadName } from './audio-file';
 import { createTokenLimiter, mintRealtimeTicket } from './realtime';
 
 export const MAX_VOICE_UPLOAD = '4mb';
+export const MIN_VOICE_BYTES = 2_048;
 const STATUS: Record<ChatErrorCode, number> = { too_long: 400, rate_limited: 429, unknown_shopper: 404, store_offline: 503, unavailable: 503 };
 
 export function createVoiceRouter({ agent, fetchImpl }: { agent: AgentApi; fetchImpl?: FetchLike }): Router {
@@ -53,15 +55,25 @@ export function createVoiceRouter({ agent, fetchImpl }: { agent: AgentApi; fetch
       return;
     }
 
+    // What came in (logged, never the audio itself), then a clean type and name for ElevenLabs.
+    const bytes = new Uint8Array(await audio.arrayBuffer());
+    const upload = uploadName(audio.type, bytes);
+    const seen = `type=${audio.type || '(none)'} name=${(audio as File).name || '(none)'} bytes=${bytes.length} kind=${upload.kind ?? 'unknown'}`;
+    console.log(`voice: upload ${seen}`);
+    if (bytes.length < MIN_VOICE_BYTES) { res.status(422).json({ error: 'no_speech', detail: 'the recording is too short' }); return; }
+    const broken = brokenRecording(bytes);
+    if (broken) { console.error(`voice: ${broken} (${seen})`); res.status(422).json({ error: 'bad_audio', detail: broken }); return; }
+
     const timings = { sttMs: 0, chatMs: 0, ttsMs: 0 };
     let t = Date.now();
     let transcript: string;
     try {
-      transcript = await transcribe(config, audio, (audio as File).name || 'voice.webm', fetchImpl);
+      transcript = await transcribe(config, new Blob([Uint8Array.from(bytes)], { type: upload.type }), upload.filename, fetchImpl);
     } catch (error) {
       const e = error as VoiceError;
-      console.error(`voice: ${e.message}`);
-      res.status(502).json({ error: 'stt_failed', status: e.status ?? null });
+      console.error(`voice: ${e.message} (${seen})`);
+      if (e.status === 400) { res.status(422).json({ error: 'bad_audio', detail: e.detail }); return; }
+      res.status(502).json({ error: 'stt_failed', status: e.status ?? null, detail: e.detail });
       return;
     }
     timings.sttMs = Date.now() - t;

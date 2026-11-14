@@ -40,7 +40,23 @@ export function voiceConfig(): VoiceConfig | null {
 }
 
 export class VoiceError extends Error {
-  constructor(public step: 'stt' | 'tts', public status: number | null, message: string) { super(message); }
+  /** ElevenLabs' own explanation (from its JSON error body), at most 300 characters; never the key or audio. */
+  detail: string | null;
+  constructor(public step: 'stt' | 'tts', public status: number | null, message: string, detail: string | null = null) {
+    super(detail ? `${message}: ${detail}` : message);
+    this.detail = detail;
+  }
+}
+
+async function errorDetail(res: Response): Promise<string | null> {
+  const text = await res.text().catch(() => '');
+  try {
+    const d = (JSON.parse(text) as { detail?: unknown }).detail;
+    const message = typeof d === 'string' ? d : d && typeof d === 'object' ? [(d as { code?: string }).code, (d as { message?: string }).message].filter(Boolean).join(': ') : '';
+    return (message || text).slice(0, 300) || null;
+  } catch {
+    return text.slice(0, 300) || null;
+  }
 }
 
 /** Speech to text. Returns the transcript ('' when nothing was said). */
@@ -53,7 +69,7 @@ export async function transcribe(config: VoiceConfig, audio: Blob, filename: str
   const res = await fetchImpl(`${API}/speech-to-text`, {
     method: 'POST', headers: { 'xi-api-key': config.apiKey }, body: form, signal: AbortSignal.timeout(20_000),
   }).catch((e) => { throw new VoiceError('stt', null, `speech-to-text unreachable: ${(e as Error).name}`); });
-  if (!res.ok) throw new VoiceError('stt', res.status, `speech-to-text answered HTTP ${res.status}`);
+  if (!res.ok) throw new VoiceError('stt', res.status, `speech-to-text answered HTTP ${res.status}`, await errorDetail(res));
   const body = (await res.json()) as { text?: unknown };
   return typeof body.text === 'string' ? body.text.trim() : '';
 }
@@ -110,6 +126,6 @@ export async function synthesize(config: VoiceConfig, text: string, fetchImpl: F
     body: JSON.stringify({ text: speakable(text).slice(0, 1_000), model_id: config.ttsModel, voice_settings: config.voiceSettings }),
     signal: AbortSignal.timeout(20_000),
   }).catch((e) => { throw new VoiceError('tts', null, `text-to-speech unreachable: ${(e as Error).name}`); });
-  if (!res.ok) throw new VoiceError('tts', res.status, `text-to-speech answered HTTP ${res.status}`);
+  if (!res.ok) throw new VoiceError('tts', res.status, `text-to-speech answered HTTP ${res.status}`, await errorDetail(res));
   return Buffer.from(await res.arrayBuffer());
 }

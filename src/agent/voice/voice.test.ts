@@ -42,7 +42,13 @@ beforeEach(() => {
   chatResult = async () => ({ reply: "You're all set! ☕ $3.09, order S-1001.", actions: [{ kind: 'order', orderNumber: 'S-1001', totalCents: 309 }], blocked: [], walletCents: 1691 });
 });
 
-function upload(fields: Record<string, string | Blob> = { audio: new Blob([new Uint8Array([1, 2, 3, 4])], { type: 'audio/webm' }), shopperId: 'shopper-1', storeId: 'scarborough' }) {
+// Recordings that look like what browsers send: WebM (EBML header) and MP4 (ftyp, moov, mdat boxes).
+const webm = (bytes = 4_096) => { const b = new Uint8Array(bytes); b.set([0x1a, 0x45, 0xdf, 0xa3]); return b; };
+const box = (type: string, size: number) => { const b = new Uint8Array(size); new DataView(b.buffer).setUint32(0, size); b.set([...type].map((c) => c.charCodeAt(0)), 4); return b; };
+const join = (...parts: Uint8Array[]) => { const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0)); let at = 0; for (const p of parts) { out.set(p, at); at += p.length; } return out; };
+const mp4 = () => join(box('ftyp', 32), box('moov', 700), box('moof', 100), box('mdat', 3_000));
+
+function upload(fields: Record<string, string | Blob> = { audio: new Blob([webm()], { type: 'audio/webm;codecs=opus' }), shopperId: 'shopper-1', storeId: 'scarborough' }) {
   const form = new FormData();
   for (const [k, v] of Object.entries(fields)) form.append(k, v as never);
   return fetch(`${base}/api/voice`, { method: 'POST', body: form });
@@ -62,6 +68,8 @@ describe('voice line', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.transcript).toBe('One large coffee with TORONTO5 please.');
+    const sent = (calls[0]!.init.body as FormData).get('file') as File;
+    expect([sent.name, sent.type]).toEqual(['voice.webm', 'audio/webm']);   // codecs parameter dropped
     expect(chats).toEqual([{ shopperId: 'shopper-1', storeId: 'scarborough', text: 'One large coffee with TORONTO5 please.' }]);
     expect(body.reply.actions).toEqual([{ kind: 'order', orderNumber: 'S-1001', totalCents: 309 }]);
     expect(Buffer.from(body.audio, 'base64')).toEqual(Buffer.from([0x49, 0x44, 0x33, 1, 2, 3]));
@@ -101,7 +109,35 @@ describe('voice line', () => {
     stt = async () => new Response('down', { status: 500 });
     const failed = await upload();
     expect(failed.status).toBe(502);
-    expect(await failed.json()).toEqual({ error: 'stt_failed', status: 500 });
+    expect(await failed.json()).toEqual({ error: 'stt_failed', status: 500, detail: 'down' });
+  });
+
+  it('takes iPhone recordings (AAC in MP4), with a clean type and name upstream', async () => {
+    const res = await upload({ audio: new Blob([mp4()], { type: 'audio/mp4;codecs=mp4a.40.2' }), shopperId: 'shopper-ios', storeId: 'queen' });
+    expect(res.status).toBe(200);
+    const sent = (calls[0]!.init.body as FormData).get('file') as File;
+    expect([sent.name, sent.type]).toEqual(['voice.m4a', 'audio/mp4']);
+    calls.length = 0;
+    expect((await upload({ audio: new Blob([mp4()]), shopperId: 'shopper-ios', storeId: 'queen' })).status).toBe(200);   // no type: sniffed
+    expect(((calls[0]!.init.body as FormData).get('file') as File).name).toBe('voice.m4a');
+  });
+
+  it('refuses recordings that cannot be decoded before calling ElevenLabs, and passes on its own reason', async () => {
+    const send = (bytes: Uint8Array<ArrayBuffer>, type = 'audio/mp4') => upload({ audio: new Blob([bytes], { type }), shopperId: 'shopper-x', storeId: 'queen' });
+    const tooShort = await send(webm(1_000), 'audio/webm');
+    expect(tooShort.status).toBe(422);
+    expect((await tooShort.json()).error).toBe('no_speech');
+    const fragments = await send(join(box('moof', 100), box('mdat', 4_000)));        // the first chunk was lost
+    expect(fragments.status).toBe(422);
+    expect((await fragments.json()).detail).toContain('missing its header');
+    const headerOnly = await send(join(box('ftyp', 32), box('moov', 3_000)));        // only the first chunk
+    expect(headerOnly.status).toBe(422);
+    expect((await headerOnly.json()).detail).toContain('no audio data');
+    expect(calls).toHaveLength(0);
+    stt = async () => Response.json({ detail: { type: 'validation_error', code: 'invalid_audio', message: 'File is corrupted. Please ensure it is playable audio.' } }, { status: 400 });
+    const rejected = await send(mp4());
+    expect(rejected.status).toBe(422);
+    expect(await rejected.json()).toEqual({ error: 'bad_audio', detail: 'invalid_audio: File is corrupted. Please ensure it is playable audio.' });
   });
 
   it('mints a single-use live-transcript ticket without exposing the key, rate-limited per shopper', async () => {
