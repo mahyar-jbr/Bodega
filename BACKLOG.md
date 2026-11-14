@@ -11,7 +11,7 @@
 | Phase | What it achieves | The check | By | Done |
 |---|---|---|---|---|
 | Before the event | The test data, a generic skeleton live on Render, and this plan, tagged `pre-event` | The live app's /api/health is green, and the tag is on GitHub | Fri Nov 13 | Done |
-| M1 | A real purchase through chat on a phone | M1-09, on the deployed app | 12:40 | 1 of 12 |
+| M1 | A real purchase through chat on a phone | M1-09, on the deployed app | 12:40 | 2 of 12 |
 | M2 | v0 gets conned, incidents and cons land in Atlas under the memory rules, and a version rolls out to every store and back | M2-09 | 14:20 | 0 of 13 |
 | M3 | The stores learn: a version is proven on the held-out set, goes live everywhere, and Roll back takes it back | M3-10, on the deployed app | 15:25 | 1 of 11 |
 | M4 | The 3-minute demo works end to end, driven only by us, and is recorded | M4-10 | 16:00 | 0 of 6 |
@@ -35,14 +35,14 @@ Hacking starts at 10:45 (nothing for Bodega is coded before). The contract lands
 | M1-05 | Seed, indexes, validators | The seed, indexes and validators are in Kasra's database | Kasra A | 11:15 | Not started |
 | S07 | createAgent wired | Startup calls createAgent, and the app still builds and starts | Kasra A | 11:25 | Not started |
 | M1-10 | Databases seeded | bodega_mahyar and the deployed bodega database (on the sandbox) are seeded with Kasra's seed script | Mahyar | 11:30 | Not started |
-| M1-01 | MemoryStore | MemoryStore passes the shared contract tests (src/shared/store-contract.ts) | Mahyar | 11:35 | In progress |
+| M1-01 | MemoryStore | MemoryStore passes the shared contract tests (src/shared/store-contract.ts) | Mahyar | 11:35 | Done |
 | M1-08 | Phone shop | /s/queen gives a nickname and $20, chats, and shows receipts and the wallet (live over SSE once M2-04 lands) | Kasra B | 11:50 | Not started |
 | M1-06 | AtlasStore | AtlasStore implements StoreApi with transactions, idempotency, order numbers and grants | Kasra A | 12:05 | Not started |
-| M1-02 | v0 shopkeeper | It buys and refunds on MemoryStore: frozen settings, a generous prompt with the catalog, two tools, the tool loop and refusal handling | Mahyar | 12:10 | Not started |
+| M1-02 | v0 shopkeeper | It buys and refunds on MemoryStore: frozen settings, a generous prompt with the catalog, two tools, the tool loop and refusal handling | Mahyar | 12:10 | In progress |
 | M1-07 | Contract tests on AtlasStore | src/store/atlas-store.test.ts runs the shared suite, and it passes | Kasra A | 12:15 | Not started |
 | M1-03 | handleMessage | Chat runs with safety limits, append-only conversations in Atlas, and the guard's hook at the money step (pass, cap or block) | Mahyar | 12:25 | Not started |
 | M1-09 | **M1 check** | A real purchase through chat on a phone, on the deployed app with AtlasStore | both | 12:40 | Not started |
-| M1-04 | `npm run try` | It replays dev cases with their transcripts and lists the dev scams that con v0 every time; the demo's lines are picked from that list by 15:30 | helper | 13:00 | Not started |
+| M1-04 | `npm run try` | It replays dev cases with their transcripts and lists the dev scams that con v0 every time; the demo's lines are picked from that list by 15:30 | helper | 13:00 | In progress |
 
 ## M2 by 14:20: v0 gets conned, and a version rolls out and back
 
