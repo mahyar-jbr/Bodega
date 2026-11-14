@@ -2,7 +2,7 @@
 // `screen`, so the screen never reads collections itself. Summaries, titles, nicknames and numbers
 // only: no raw customer text ever goes in here.
 import { ObjectId, type Db } from 'mongodb';
-import type { StoreApi, StoreId } from '../../shared/contract';
+import type { AwaitingApproval, StoreApi, StoreId } from '../../shared/contract';
 import type { AgentMetrics, IncidentDoc, MetricPoint } from '../auditor/auditor';
 import { sweepInterruptedEvaluations, type EvaluationDoc } from '../eval/record';
 import type { ConDoc } from '../memory/con-memory';
@@ -30,7 +30,7 @@ export interface ScreenSnapshot {
   feed: { id: string; kind: FeedKind; who: string; text: string; amountCents: number | null; at: string }[];
   cons: { id: string; summary: string; firstSeen: StoreId; worked: number; blocked: number; coveredBy: number | null }[];
   learning: null | {
-    phase: 'incident' | 'drafting' | 'testing' | 'promoted' | 'rejected';
+    phase: 'incident' | 'drafting' | 'testing' | 'awaiting' | 'promoted' | 'rejected';
     title?: string;                // the panel's title when it isn't "Learning from <store>" (the gate demo)
     store: StoreId;
     incident: { summary: string; detail: string; lostCents: number };
@@ -117,6 +117,8 @@ export interface SnapshotDeps {
   metrics: () => Promise<AgentMetrics>;
   stores: () => { storeId: StoreId; appliedVersion: number; appliedAt: Date | null; online: boolean }[];
   settingsHash: string;
+  /** Approval mode: the version that passed the gate and waits for a person (agent.state().awaitingApproval). */
+  awaitingApproval?: () => AwaitingApproval | null | undefined;
 }
 
 const iso = (d: Date | null | undefined) => (d ? new Date(d).toISOString() : null);
@@ -260,6 +262,22 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
           ? `Rejected: ${reasons[0] ?? (run?.phase === 'failed' ? 'the run failed' : 'it did not beat the current version')}`
           : null,
     } : null;
+  }
+
+  // ── Approval mode: a version proven by the gate waits for a person ──
+  const waiting = deps.awaitingApproval?.() ?? null;
+  if (waiting) {
+    const base = learning;
+    learning = {
+      phase: 'awaiting', store: base?.store ?? 'queen', title: base?.title,
+      incident: base?.incident ?? { summary: 'A new con', detail: '', lostCents: 0 },
+      guardrail: { ...(base?.guardrail ?? { newRules: waiting.rules.length, parentVersion: 0, parentRules: 0 }), version: waiting.version, rules: base?.guardrail.version === waiting.version ? base.guardrail.rules : waiting.rules },
+      test: { done: waiting.scamsTotal + waiting.honestTotal, total: waiting.scamsTotal + waiting.honestTotal,
+        scamsTested: waiting.scamsTotal, scamsStopped: waiting.scamsTotal - waiting.scamSuccess,
+        honestTested: waiting.honestTotal, honestServed: waiting.honestTotal - waiting.honestTurnedAway },
+      scamsTotal: waiting.scamsTotal, honestTotal: waiting.honestTotal, settingsHash: base?.settingsHash ?? deps.settingsHash,
+      verdict: `Proven on ${waiting.scamsTotal + waiting.honestTotal} unseen cases. Waiting for a person to approve`,
+    };
   }
 
   // ── Rollout: the last promotion or rollback, with each store's time on the same clock ──
@@ -458,6 +476,7 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
   const scene: Scene =
     state?.change === 'rollback' && sinceChange < 60_000 ? 'immunity'
     : learning && (learning.phase === 'drafting' || learning.phase === 'testing') ? 'learning'
+    : learning?.phase === 'awaiting' ? 'learning'
     : demo && learning && demo.finishedAt && Date.now() - demo.finishedAt.getTime() < 60_000 ? 'learning'
     : learning?.phase === 'rejected' && run?.finishedAt && Date.now() - run.finishedAt.getTime() < 60_000 ? 'learning'
     : learning?.phase === 'rejected' && !run && newest && Date.now() - newest.createdAt.getTime() < 60_000 ? 'learning'

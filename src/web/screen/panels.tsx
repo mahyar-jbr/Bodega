@@ -9,6 +9,7 @@ const STEP_STATE: Record<LearningData['phase'], ['done' | 'running' | 'waiting',
   incident: ['running', 'waiting', 'waiting'],
   drafting: ['done', 'running', 'waiting'],
   testing: ['done', 'done', 'running'],
+  awaiting: ['done', 'done', 'done'],
   promoted: ['done', 'done', 'done'],
   rejected: ['done', 'done', 'done'],
 };
@@ -17,6 +18,7 @@ const PHASE_WORD: Record<LearningData['phase'], [string, string]> = {
   incident: ['Noticed', 'learning'],
   drafting: ['Drafting', 'learning'],
   testing: ['Testing', 'learning'],
+  awaiting: ['Waiting for approval', 'learning'],
   promoted: ['Promoted', 'immune'],
   rejected: ['Rejected', 'conned'],
 };
@@ -82,7 +84,7 @@ export function LearningPanel({ data }: { data: LearningData }) {
           <TestColumn test={data.test} scamsTotal={data.scamsTotal} honestTotal={data.honestTotal} />
         </div>
       </div>
-      <div className="bs-learn-foot" data-verdict={data.phase === 'promoted' || data.phase === 'rejected' ? data.phase : 'pending'}>
+      <div className="bs-learn-foot" data-verdict={data.phase === 'promoted' || data.phase === 'rejected' || data.phase === 'awaiting' ? data.phase : 'pending'}>
         <span className="stage-body">{data.verdict ?? 'Ships only if it stops more scams and still serves honest shoppers.'}</span>
         <span className="stage-label bs-quiet" style={{ whiteSpace: "nowrap" }}>Same model, same prompt <span className="mono-stage">{data.settingsHash.slice(0, 8)}</span></span>
       </div>

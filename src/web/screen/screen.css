@@ -315,3 +315,4 @@
 .bs-mem-rules[data-compact] .stage-body { font-size: 26px; line-height: 1.3; white-space: nowrap; }
 .bs-mem-rules[data-compact] .bs-mem-rule { padding-top: 10px; }
 .bs-proofs .bs-proof-row { padding: 6px 14px; }
+.bs-learn-foot[data-verdict="awaiting"] { color: var(--learning); }

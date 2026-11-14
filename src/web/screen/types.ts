@@ -61,7 +61,7 @@ export interface ConRow {
 }
 
 // The learning loop for the newest candidate version.
-export type LearningPhase = 'incident' | 'drafting' | 'testing' | 'promoted' | 'rejected';
+export type LearningPhase = 'incident' | 'drafting' | 'testing' | 'awaiting' | 'promoted' | 'rejected';
 
 export interface TestProgress {
   done: number; total: number;
