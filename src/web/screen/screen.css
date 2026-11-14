@@ -316,3 +316,5 @@
 .bs-mem-rules[data-compact] .bs-mem-rule { padding-top: 10px; }
 .bs-proofs .bs-proof-row { padding: 6px 14px; }
 .bs-learn-foot[data-verdict="awaiting"] { color: var(--learning); }
+.bs-store-chip { white-space: nowrap; }
+.bs-stage[data-narrow] .bs-table .bs-num-col { width: 104px; }
