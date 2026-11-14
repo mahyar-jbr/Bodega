@@ -3,6 +3,8 @@
 // only; a dev run also keeps each case's outcome for debugging.
 import { ObjectId, type Db } from 'mongodb';
 import type { EvalSet } from './cases';
+import { hasModelKey } from '../shopkeeper/run';
+import { SETTINGS_HASH } from '../shopkeeper/settings';
 import { runEvaluation, type EvalProgress, type EvalRun, type EvalSummary, type RunEvalInput } from './runner';
 
 export interface EvaluationDoc {
@@ -23,11 +25,13 @@ export interface EvaluationDoc {
 const PROGRESS_EVERY_MS = 400;           // at most a few writes a second, whatever the concurrency
 
 export async function recordEvaluation(db: Db, input: RunEvalInput & { purpose: string; onStart?: (id: string) => void }): Promise<EvalRun & { evaluationId: string }> {
+  if (!input.run && !hasModelKey()) throw new Error('ANTHROPIC_API_KEY is not set: refusing to evaluate the keyless stub shopkeeper');
+  const settingsHash = input.settingsHash !== undefined ? input.settingsHash : input.run ? null : SETTINGS_HASH;
   const coll = db.collection<EvaluationDoc>('evaluations');
   const _id = new ObjectId();
   const total = input.cases.length;
   await coll.insertOne({
-    _id, set: input.set, version: input.version.version, settingsHash: input.settingsHash ?? null, purpose: input.purpose,
+    _id, set: input.set, version: input.version.version, settingsHash, purpose: input.purpose,
     status: 'running', progress: { done: 0, total, scamsTested: 0, scamsStopped: 0, honestTested: 0, honestServed: 0 },
     summary: null, startedAt: new Date(), finishedAt: null,
   });
@@ -45,7 +49,7 @@ export async function recordEvaluation(db: Db, input: RunEvalInput & { purpose: 
   const timer = setInterval(() => void flush().catch(() => {}), PROGRESS_EVERY_MS);
 
   try {
-    const run = await runEvaluation({ ...input, onProgress: (p) => { latest = p; input.onProgress?.(p); } });
+    const run = await runEvaluation({ ...input, settingsHash, onProgress: (p) => { latest = p; input.onProgress?.(p); } });
     clearInterval(timer);
     await coll.updateOne({ _id }, { $set: {
       status: 'done', finishedAt: new Date(), summary: run.summary,

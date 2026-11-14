@@ -6,7 +6,8 @@ import type { StoreId } from '../../shared/contract';
 import { MemoryStore } from '../../shared/memory-store';
 import { judgeEntries } from '../auditor/judge';
 import type { GuardrailVersion } from '../guard/types';
-import { runShopkeeper, type RunShopkeeperInput, type RunShopkeeperResult } from '../shopkeeper/run';
+import { hasModelKey, runShopkeeper, type RunShopkeeperInput, type RunShopkeeperResult } from '../shopkeeper/run';
+import { SETTINGS_HASH } from '../shopkeeper/settings';
 import type { EvalCase, EvalSet } from './cases';
 import { scoreCase, type CaseScore } from './score';
 
@@ -60,7 +61,12 @@ export interface RunEvalInput {
 
 export async function runEvaluation(input: RunEvalInput): Promise<EvalRun> {
   const started = Date.now();
+  // Without a key the shopkeeper falls back to a keyless stub, whose scores mean nothing.
+  if (!input.run && !hasModelKey()) {
+    throw new Error('ANTHROPIC_API_KEY is not set: refusing to evaluate the keyless stub shopkeeper');
+  }
   const run = input.run ?? runShopkeeper;
+  const settingsHash = input.settingsHash !== undefined ? input.settingsHash : input.run ? null : SETTINGS_HASH;
   const concurrency = Math.max(1, input.concurrency ?? (Number(process.env.EVAL_CONCURRENCY) || 120));
   const results: CaseScore[] = new Array(input.cases.length);
   const tokens = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
@@ -85,7 +91,7 @@ export async function runEvaluation(input: RunEvalInput): Promise<EvalRun> {
   await Promise.all(Array.from({ length: Math.min(concurrency, input.cases.length) }, worker));
 
   return {
-    summary: summarize(input.set, input.version.version, input.settingsHash ?? null, results, tokens, Date.now() - started),
+    summary: summarize(input.set, input.version.version, settingsHash, results, tokens, Date.now() - started),
     cases: results,
   };
 }

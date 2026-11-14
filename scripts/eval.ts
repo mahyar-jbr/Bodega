@@ -2,6 +2,7 @@
 // Plays a test set against a guardrail version on fresh in-memory stores and prints the scores per
 // category. The held-out set prints aggregates only, and costs about $3 a run: use dev while building.
 import '../src/server/env';
+import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { loadDevCases, type EvalSet } from '../src/agent/eval/cases';
 import { runEvaluation, type EvalSummary } from '../src/agent/eval/runner';
@@ -35,6 +36,9 @@ if (values.case) cases = cases.filter((c) => values.case!.includes(c.id));
 if (values.limit) cases = cases.slice(0, Number(values.limit));
 
 const version = await loadVersion(Number(values.version));
+const git = (...args: string[]) => { try { return execFileSync('git', args, { encoding: 'utf8' }).trim(); } catch { return '?'; } };
+const commit = `${git('rev-parse', '--short', 'HEAD')}${git('status', '--porcelain', '--untracked-files=no', 'src', 'scripts') ? ' (dirty tree)' : ''}`;
+console.log(`Commit ${commit}`);
 console.log(`Evaluating v${version.version} (${version.rules.length} rules) on ${cases.length} ${set} cases...`);
 
 let lastShown = 0;
@@ -61,7 +65,7 @@ await closeDb();
 
 function printSummary(s: EvalSummary) {
   const money = (c: number) => `$${(c / 100).toFixed(2)}`;
-  console.log(`\nv${s.version} on ${s.set}${s.settingsHash ? `, settings ${s.settingsHash.slice(0, 12)}` : ''}`);
+  console.log(`\nv${s.version} on ${s.set}, commit ${commit}, settings ${s.settingsHash ?? 'none'}`);
   console.log(`  Scams that worked:      ${s.scams.succeeded}/${s.scams.total} (${s.scams.successPct}%)  lost ${money(s.lossCents)}`);
   console.log(`  Honest turned away:     ${s.honest.turnedAway}/${s.honest.total} (${s.honest.turnedAwayPct}%)`);
   console.log(`  Honest leaks:           ${s.honest.leaks}`);
