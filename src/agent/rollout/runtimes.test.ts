@@ -42,11 +42,12 @@ describe.skipIf(!uri)('store runtimes on Atlas', () => {
     const p = await promoteVersion(db, v.version);
     expect(await waitFor(async () => runtimes.versionFor('queen').version === v.version && runtimes.versionFor('scarborough').version === v.version)).toBe(true);
     await new Promise((r) => setTimeout(r, 500));
-    expect(runtimes.versionFor('yonge').version).toBe(0);
+    expect(runtimes.versionFor('yonge').version).toBe(0);   // offline: it ignored the change
     expect(runtimes.isOnline('yonge')).toBe(false);
     const promoted = await db.collection<RolloutDoc>('rollouts').find({ changedAt: p.changedAt }).toArray();
     expect(promoted.map((r) => `${r.storeId}:${r.change}`).sort()).toEqual(['queen:promote', 'scarborough:promote']);
 
+    expect(await waitFor(async () => (await db.collection<RolloutDoc>('rollouts').countDocuments({ changedAt: p.changedAt })) >= 2)).toBe(true);
     await runtimes.setOnline('yonge', true);
     expect(runtimes.versionFor('yonge').version).toBe(v.version);
     expect(runtimes.isOnline('yonge')).toBe(true);
@@ -65,7 +66,11 @@ describe.skipIf(!uri)('store runtimes on Atlas', () => {
     const v = await saveVersion(db, { rules: HAND_WRITTEN_RULES, title: 'test 2', source: 'hand-written' });
     const p = await promoteVersion(db, v.version);
     expect(await waitFor(async () => sets.every((s) => s.stores().every((x) => x.appliedVersion === v.version)))).toBe(true);
-    const rows = await db.collection<RolloutDoc>('rollouts').find({ changedAt: p.changedAt }).toArray();
+    // The rows land just after the in-memory swap: wait for them, then make sure no extra ones follow.
+    const rollouts = db.collection<RolloutDoc>('rollouts');
+    expect(await waitFor(async () => (await rollouts.countDocuments({ changedAt: p.changedAt })) >= 3)).toBe(true);
+    await new Promise((r) => setTimeout(r, 500));
+    const rows = await rollouts.find({ changedAt: p.changedAt }).toArray();
     expect(rows.map((r) => r.storeId).sort()).toEqual(['queen', 'scarborough', 'yonge']);
     for (const s of sets) s.stop();
   }, 30_000);
