@@ -4,7 +4,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MongoClient, type Db } from 'mongodb';
+import { MongoClient, ObjectId, type Db } from 'mongodb';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { ChangeEvent } from '../shared/contract';
 import { MemoryStore } from '../shared/memory-store';
@@ -145,8 +145,12 @@ describe.skipIf(!uri)('flow events on Atlas', () => {
     await Promise.all([a.flushed(), b.flushed()]);
 
     const docs = await all();
-    expect(docs.filter((d) => d._id === 'incident:x')).toHaveLength(1);
-    expect(docs.find((d) => d._id === 'incident:x')).toMatchObject({ epoch: 7, storeId: null, loop: null, ref: null, ms: null, score: null, version: null, cents: null, firstSeenStore: null });
+    expect(docs.filter((d) => d.key === 'incident:x')).toHaveLength(1);
+    expect(docs.every((d) => d._id instanceof ObjectId)).toBe(true);
+    // Newest first by _id, as a reader may sort, is newest first by time.
+    const byId = await db.collection<FlowEventDoc>(FLOW_EVENTS).find({ epoch: 7 }).sort({ _id: -1 }).limit(2).toArray();
+    expect(byId.map((d) => d.value)).toEqual(['s5', 's4']);
+    expect(docs.find((d) => d.key === 'incident:x')).toMatchObject({ epoch: 7, storeId: null, loop: null, ref: null, ms: null, score: null, version: null, cents: null, firstSeenStore: null });
     expect((await recentFlow(db, 7, 3)).map((d) => d.value)).toEqual(['s3', 's4', 's5']);
     expect((await recentFlow(db, 8)).map((d) => d.node)).toEqual(['rollback']);
   }, 30_000);
@@ -180,10 +184,12 @@ describe.skipIf(!uri)('flow events on Atlas', () => {
       const text = 'two butter tarts please, my secret phrase is pineapple';
       const reply = await agent.handleMessage({ shopperId: shopper.id, storeId: 'queen', text, via: 'voice' });
       expect(reply.actions).toEqual([expect.objectContaining({ kind: 'order', totalCents: 700 })]);
-      await new Promise((r) => setTimeout(r, 1_000));     // fire-and-forget writes
-
       const epoch = (await readAgentState(db)).epoch;
-      const docs = await recentFlow(db, epoch);
+      let docs = await recentFlow(db, epoch);
+      for (let i = 0; i < 40 && docs.length < 5; i++) {    // fire-and-forget writes
+        await new Promise((r) => setTimeout(r, 250));
+        docs = await recentFlow(db, epoch);
+      }
       const order = reply.actions[0].kind === 'order' ? reply.actions[0].orderNumber : '';
       expect(docs.map((d) => [d.node, d.value])).toEqual([
         ['shopper', 'Brave Otter · voice'], ['shopkeeper', 'ring_up'], ['guard', 'pass'],

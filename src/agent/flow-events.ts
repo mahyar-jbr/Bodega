@@ -21,9 +21,11 @@ export type FlowNode = 'shopper' | 'shopkeeper' | 'guard' | 'transaction' | 'cha
   | 'memory' | 'learner' | 'gate' | 'guardrail' | 'rollout' | 'block' | 'rollback';
 
 export interface FlowEventDoc {
-  /** A source key when the event comes from shared data (a ledger entry, an incident, a rollout row),
-   *  so the same event from two instances is written once; otherwise an ObjectId. */
-  _id: string | ObjectId;
+  /** Always an ObjectId, so sorting by _id (or the capped collection's natural order) is by time. */
+  _id: ObjectId;
+  /** A source key when the event comes from shared data (a ledger entry, an incident, a rollout row):
+   *  unique, so the same event from two instances is written once. */
+  key: string | null;
   epoch: number;
   at: Date;
   node: FlowNode;
@@ -83,7 +85,11 @@ export async function ensureFlowEvents(db: Db): Promise<void> {
   } catch (error) {
     if ((error as { codeName?: string }).codeName !== 'NamespaceExists') console.error(`flow events: no capped collection (${(error as Error).message})`);
   }
-  await db.collection(FLOW_EVENTS).createIndex({ epoch: 1, at: -1 }).catch((e) => console.error('flow events: index failed:', (e as Error).message));
+  const events = db.collection(FLOW_EVENTS);
+  await Promise.all([
+    events.createIndex({ epoch: 1, at: -1 }),
+    events.createIndex({ key: 1 }, { unique: true, partialFilterExpression: { key: { $type: 'string' } } }),
+  ]).catch((e) => console.error('flow events: index failed:', (e as Error).message));
 }
 
 export function createFlow({ db, epoch, now = () => new Date() }: { db: Db; epoch: () => number; now?: () => Date }): Flow {
@@ -94,7 +100,7 @@ export function createFlow({ db, epoch, now = () => new Date() }: { db: Db; epoc
     emit(e) {
       try {
         const doc: FlowEventDoc = {
-          _id: e.key ?? new ObjectId(), epoch: epoch(), at: e.at ?? now(), node: e.node, storeId: e.storeId ?? null,
+          _id: new ObjectId(), key: e.key ?? null, epoch: epoch(), at: e.at ?? now(), node: e.node, storeId: e.storeId ?? null,
           value: flowValue(e.value), loop: e.loop ?? null, ref: e.ref ?? null, ms: e.ms ?? null, score: e.score ?? null,
           version: e.version ?? null, cents: e.cents ?? null, firstSeenStore: e.firstSeenStore ?? null,
         };
