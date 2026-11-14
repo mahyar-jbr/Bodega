@@ -3,29 +3,53 @@
 // same guard, same 300-character and rate limits)  3. ElevenLabs text-to-speech of the reply.
 // Returns { transcript, reply (the ChatReply), audio (base64 mp3, or null if speech failed), timings }.
 // 501 { error: 'voice_off' } when ELEVENLABS_API_KEY isn't set, so nothing changes without the key.
-import express, { Router } from 'express';
-import { AgentError, type AgentApi, type ChatErrorCode } from '../../shared/contract';
+// Nothing reaches ElevenLabs for an unknown shopper, past the per-IP cap, or past the day's ceiling.
+import express, { Router, type Request } from 'express';
+import { AgentError, type AgentApi, type ChatErrorCode, type StoreApi } from '../../shared/contract';
 import { isStoreId } from '../../shared/store-data';
 import { synthesize, transcribe, voiceConfig, VoiceError, type FetchLike } from './elevenlabs';
 import { brokenRecording, uploadName } from './audio-file';
+import { createDailyBudget, createWindowLimiter, voiceLimits, type VoiceLimits } from './limits';
 import { createTokenLimiter, mintRealtimeTicket } from './realtime';
 
 export const MAX_VOICE_UPLOAD = '4mb';
 export const MIN_VOICE_BYTES = 2_048;
 const STATUS: Record<ChatErrorCode, number> = { too_long: 400, rate_limited: 429, unknown_shopper: 404, store_offline: 503, unavailable: 503 };
 
-export function createVoiceRouter({ agent, fetchImpl }: { agent: AgentApi; fetchImpl?: FetchLike }): Router {
+export interface VoiceRouterDeps {
+  agent: AgentApi;
+  /** To check a shopper exists before anything is spent. */
+  store: Pick<StoreApi, 'shopper'>;
+  fetchImpl?: FetchLike;
+  limits?: VoiceLimits;
+}
+
+/** The client's address: Express's req.ip, which is the real one with `trust proxy` set (Render). */
+const clientIp = (req: Request) => req.ip ?? req.socket.remoteAddress ?? 'unknown';
+
+export function createVoiceRouter({ agent, store, fetchImpl, limits = voiceLimits() }: VoiceRouterDeps): Router {
   const router = Router();
   const allowToken = createTokenLimiter();
+  const tokenPerIp = createWindowLimiter(limits.perIpPerMinute, 60_000);
+  const voicePerIp = createWindowLimiter(limits.perIpPerMinute, 60_000);
+  const budget = createDailyBudget(limits.daily);
+
+  async function knownShopper(shopperId: string): Promise<boolean> {
+    return Boolean(await store.shopper(shopperId).catch(() => null));
+  }
 
   // GET /api/voice/token?shopperId=…: a single-use ticket for the live transcript (ElevenLabs realtime
-  // speech-to-text, straight from the browser). 501 without the key; 429 past the per-shopper limit.
+  // speech-to-text, straight from the browser). 501 without the key; 404 for an unknown shopper; 429
+  // past the per-IP or per-shopper limit; 503 voice_busy past the day's ceiling.
   router.get('/voice/token', async (req, res) => {
     const config = voiceConfig();
     if (!config) { res.status(501).json({ error: 'voice_off' }); return; }
     const shopperId = typeof req.query.shopperId === 'string' ? req.query.shopperId.trim() : '';
     if (!shopperId || shopperId.length > 200) { res.status(400).json({ error: 'bad_request', detail: 'shopperId is required' }); return; }
+    if (!tokenPerIp(clientIp(req))) { res.status(429).json({ error: 'rate_limited' }); return; }
+    if (!(await knownShopper(shopperId))) { res.status(404).json({ error: 'unknown_shopper' }); return; }
     if (!allowToken(shopperId)) { res.status(429).json({ error: 'rate_limited' }); return; }
+    if (!budget.take('realtime')) { res.status(503).json({ error: 'voice_busy' }); return; }
     try {
       res.set('cache-control', 'no-store').json(await mintRealtimeTicket(config, fetchImpl));
     } catch (error) {
@@ -37,6 +61,7 @@ export function createVoiceRouter({ agent, fetchImpl }: { agent: AgentApi; fetch
   router.post('/voice', express.raw({ type: 'multipart/form-data', limit: MAX_VOICE_UPLOAD }), async (req, res) => {
     const config = voiceConfig();
     if (!config) { res.status(501).json({ error: 'voice_off' }); return; }
+    if (!voicePerIp(clientIp(req))) { res.status(429).json({ error: 'rate_limited' }); return; }
 
     let form: FormData;
     try {
@@ -54,6 +79,7 @@ export function createVoiceRouter({ agent, fetchImpl }: { agent: AgentApi; fetch
       res.status(400).json({ error: 'bad_request', detail: 'audio, shopperId and storeId are required' });
       return;
     }
+    if (!(await knownShopper(shopperId.trim()))) { res.status(404).json({ error: 'unknown_shopper' }); return; }
 
     // What came in (logged, never the audio itself), then a clean type and name for ElevenLabs.
     const bytes = new Uint8Array(await audio.arrayBuffer());
@@ -63,6 +89,7 @@ export function createVoiceRouter({ agent, fetchImpl }: { agent: AgentApi; fetch
     if (bytes.length < MIN_VOICE_BYTES) { res.status(422).json({ error: 'no_speech', detail: 'the recording is too short' }); return; }
     const broken = brokenRecording(bytes);
     if (broken) { console.error(`voice: ${broken} (${seen})`); res.status(422).json({ error: 'bad_audio', detail: broken }); return; }
+    if (!budget.take('stt')) { console.error('voice: the day\'s speech-to-text ceiling is reached'); res.status(503).json({ error: 'voice_busy' }); return; }
 
     const timings = { sttMs: 0, chatMs: 0, ttsMs: 0 };
     let t = Date.now();
@@ -92,11 +119,15 @@ export function createVoiceRouter({ agent, fetchImpl }: { agent: AgentApi; fetch
     t = Date.now();
     let audioOut: string | null = null;
     let ttsError: string | null = null;
-    try {
-      audioOut = (await synthesize(config, reply.reply, fetchImpl)).toString('base64');
-    } catch (error) {
-      ttsError = 'tts_failed';
-      console.error(`voice: ${(error as Error).message}`);
+    if (!budget.take('tts')) {
+      ttsError = 'voice_busy';   // the reply still comes back, as text
+    } else {
+      try {
+        audioOut = (await synthesize(config, reply.reply, fetchImpl)).toString('base64');
+      } catch (error) {
+        ttsError = 'tts_failed';
+        console.error(`voice: ${(error as Error).message}`);
+      }
     }
     timings.ttsMs = Date.now() - t;
 

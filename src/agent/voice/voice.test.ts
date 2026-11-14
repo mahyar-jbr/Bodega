@@ -6,6 +6,10 @@ import { AgentError, type AgentApi, type ChatReply } from '../../shared/contract
 import { speakable, voiceConfig } from './elevenlabs';
 import { createVoiceRouter } from './router';
 
+// Shoppers the fake store knows (any id starting with "shopper-" or "s-token-"); everyone else is unknown.
+const store = { shopper: async (id: string) => (/^(shopper-|s-token-)/.test(id) ? ({ id } as never) : null) };
+const roomy = { perIpPerMinute: 1_000, daily: { stt: 1_000, tts: 1_000, realtime: 1_000 } };
+
 const KEY = 'test-eleven-key-123';
 const calls: { url: string; init: RequestInit }[] = [];
 let stt: () => Promise<Response>;
@@ -26,7 +30,7 @@ let base: string;
 beforeAll(async () => {
   const app = express();
   app.use(express.json({ limit: '32kb' }));
-  app.use('/api', createVoiceRouter({ agent, fetchImpl: fakeFetch }));
+  app.use('/api', createVoiceRouter({ agent, store, fetchImpl: fakeFetch, limits: roomy }));
   server = app.listen(0);
   await new Promise((r) => server.once('listening', r));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -140,6 +144,15 @@ describe('voice line', () => {
     expect(await rejected.json()).toEqual({ error: 'bad_audio', detail: 'invalid_audio: File is corrupted. Please ensure it is playable audio.' });
   });
 
+  it('spends nothing on an unknown shopper, on either route', async () => {
+    const res = await upload({ audio: new Blob([webm()], { type: 'audio/webm' }), shopperId: 'nope', storeId: 'queen' });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'unknown_shopper' });
+    const token = await fetch(`${base}/api/voice/token?shopperId=nope`);
+    expect(token.status).toBe(404);
+    expect(calls).toHaveLength(0);
+  });
+
   it('mints a single-use live-transcript ticket without exposing the key, rate-limited per shopper', async () => {
     const get = (q: string) => fetch(`${base}/api/voice/token${q}`);
     vi.stubEnv('ELEVENLABS_API_KEY', '');
@@ -178,5 +191,45 @@ describe('voice line', () => {
     vi.stubEnv('ELEVENLABS_STYLE', 'nonsense');
     vi.stubEnv('ELEVENLABS_SPEAKER_BOOST', 'false');
     expect(voiceConfig()!.voiceSettings).toEqual({ stability: 0.3, similarity_boost: 0.8, style: 0.35, use_speaker_boost: false });
+  });
+});
+
+describe('voice line spending caps', () => {
+  let capped: Server;
+  let url: string;
+  beforeAll(async () => {
+    const app = express();
+    app.set('trust proxy', 1);
+    app.use('/api', createVoiceRouter({ agent, store, fetchImpl: fakeFetch, limits: { perIpPerMinute: 3, daily: { stt: 2, tts: 1, realtime: 1 } } }));
+    capped = app.listen(0);
+    await new Promise((r) => capped.once('listening', r));
+    url = `http://127.0.0.1:${(capped.address() as AddressInfo).port}`;
+  });
+  afterAll(() => new Promise((r) => capped.close(r)));
+
+  const post = (ip: string, shopperId = 'shopper-cap') => {
+    const form = new FormData();
+    form.append('audio', new Blob([webm()], { type: 'audio/webm' }));
+    form.append('shopperId', shopperId);
+    form.append('storeId', 'queen');
+    return fetch(`${url}/api/voice`, { method: 'POST', body: form, headers: { 'x-forwarded-for': ip } });
+  };
+
+  it('caps each client address per minute, and the day\'s ElevenLabs calls overall', async () => {
+    const first = await post('203.0.113.1');
+    expect(first.status).toBe(200);
+    expect((await first.json()).audio).not.toBeNull();       // stt 1 of 2, tts 1 of 1
+    const second = await post('203.0.113.1');
+    expect(second.status).toBe(200);
+    expect(await second.json()).toMatchObject({ audio: null, ttsError: 'voice_busy' });   // the reply still comes as text
+    const third = await post('203.0.113.1');
+    expect(third.status).toBe(503);                           // stt ceiling reached
+    expect(await third.json()).toEqual({ error: 'voice_busy' });
+    expect((await post('203.0.113.1')).status).toBe(429);    // 4th from this address in a minute
+    expect((await post('198.51.100.7')).status).toBe(503);   // another address: past the per-IP cap, still the daily ceiling
+    const t1 = await fetch(`${url}/api/voice/token?shopperId=s-token-cap`, { headers: { 'x-forwarded-for': '198.51.100.8' } });
+    expect(t1.status).toBe(200);
+    const t2 = await fetch(`${url}/api/voice/token?shopperId=s-token-cap2`, { headers: { 'x-forwarded-for': '198.51.100.8' } });
+    expect(t2.status).toBe(503);                              // one realtime token a day here
   });
 });

@@ -13,6 +13,8 @@ export function createApp({ distDir = DEFAULT_DIST, api, realtime }:
   { distDir?: string; api?: RouteDeps; realtime?: SseRouteDeps } = {}): Express {
   const app = express();
   app.disable('x-powered-by');
+  // Render puts one proxy in front of the app: trust it, so req.ip is the client's address (per-IP caps).
+  app.set('trust proxy', 1);
   app.use(express.json({ limit: '32kb' }));
 
   // 200 when Atlas answers a ping, 503 with the reason otherwise. Render's health check uses it.
@@ -24,7 +26,7 @@ export function createApp({ distDir = DEFAULT_DIST, api, realtime }:
   // ── API routes are mounted here, above the 404 below. ──
   if (realtime) app.use(createSseRouter(realtime));
   if (api) app.use('/api', createApiRouter(api));
-  if (api) app.use('/api', createVoiceRouter({ agent: api.agent }));
+  if (api) app.use('/api', createVoiceRouter({ agent: api.agent, store: api.store }));
 
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'not_found' });
