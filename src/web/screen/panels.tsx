@@ -1,7 +1,7 @@
 // The big screen's scene panels: learning (M4-01), immunity and forget, and the results (M4-03).
 import { AwningMark } from './parts';
 import { clock, money, seconds } from './format';
-import { storeName, type AuditData, type ConRow, type FlashData, type LearningData, type VersionPoint, type ResultsData, type RolloutData, type TestProgress } from './types';
+import { storeName, type AuditData, type ConRow, type FlashData, type MemoryData, type LearningData, type VersionPoint, type ResultsData, type RolloutData, type TestProgress } from './types';
 
 // ── Learning ──────────────────────────────────────────────────────────────────────────────
 
@@ -173,14 +173,16 @@ const MEMORY_RULES: [title: string, body: string][] = [
   ['Any rule can be taken back', 'Roll back, and every store forgets it in seconds.'],
 ];
 
-export function MemoryPanel({ cons, max = 3, onOpen }: { cons: ConRow[]; max?: number; onOpen?: (conId: string) => void }) {
+export function MemoryPanel({ cons, max = 3, onOpen, memory }: { cons: ConRow[]; max?: number; onOpen?: (conId: string) => void; memory?: MemoryData }) {
+  const proof = memory?.proof;
+  const rows = proof || memory?.ttlSeconds ? Math.min(max, 2) : max;
   return (
     <section className="bs-glass bs-panel bs-scene" aria-label="Memory">
       <div className="bs-panel-head">
         <h2 className="stage-heading">What Bodega remembers</h2>
         <span className="stage-label bs-quiet">{cons.length} {cons.length === 1 ? 'con' : 'cons'}, summaries only</span>
       </div>
-      <div className="bs-mem-rules">
+      <div className="bs-mem-rules" data-compact={memory && (memory.ttlSeconds || proof || memory.forgotten > 0) ? 'true' : undefined}>
         {MEMORY_RULES.map(([t, b]) => (
           <div key={t} className="bs-mem-rule">
             <div className="stage-body bs-ink">{t}</div>
@@ -188,10 +190,32 @@ export function MemoryPanel({ cons, max = 3, onOpen }: { cons: ConRow[]; max?: n
           </div>
         ))}
       </div>
-      <table className="bs-table stage-body" style={{ marginTop: 18 }}>
+      {memory && (memory.ttlSeconds || proof || memory.forgotten > 0) && (
+        <div className="bs-proofs">
+          {memory.ttlSeconds ? (
+            <div className="bs-proof-row stage-label" data-ok="true">
+              <span className="bs-dot" /><span>Raw chats expire {Math.round(memory.ttlSeconds / 3600)} h after the last message (TTL index on conversations)</span>
+            </div>
+          ) : null}
+          {proof && (
+            <div key={proof.at} className="bs-proof-row stage-label" data-ok={proof.refused ? 'true' : 'false'} data-fresh="true">
+              <span className="bs-dot" />
+              <span>{proof.refused
+                ? <>Tried to store raw chat text in {proof.collection}. <b className="bs-ink">Atlas refused it:</b> {proof.message} (code {proof.code})</>
+                : <>Tried to store raw chat text in {proof.collection}, and it was accepted: {proof.message}</>}</span>
+            </div>
+          )}
+          {memory.forgotten > 0 && (
+            <div className="bs-proof-row stage-label" data-ok="true">
+              <span className="bs-dot" /><span>{memory.forgotten} {memory.forgotten === 1 ? 'shopper' : 'shoppers'} forgotten on request: their chats deleted, the rules kept</span>
+            </div>
+          )}
+        </div>
+      )}
+      <table className="bs-table stage-body" style={{ marginTop: 14 }}>
         <thead className="stage-label"><tr><th>Con</th><th>First seen</th><th className="bs-num-col" style={{ width: 230 }}>Blocked by</th></tr></thead>
         <tbody>
-          {cons.slice(0, max).map((c) => (
+          {cons.slice(0, rows).map((c) => (
             <tr key={c.id} onClick={() => onOpen?.(c.id)} style={{ cursor: onOpen ? 'pointer' : undefined }}>
               <td>{c.summary}</td>
               <td><span className="bs-store-chip"><AwningMark store={c.firstSeen} width={30} />{storeName(c.firstSeen)}</span></td>

@@ -88,6 +88,6 @@ function MainPanel({ scene, data, auditIndex, onOpenCon }: { scene: Scene; data:
       </div>
     );
   }
-  if (scene === 'memory' || scene === 'audit') return <MemoryPanel key="memory" cons={data.cons} onOpen={onOpenCon} />;
+  if (scene === 'memory' || scene === 'audit') return <MemoryPanel key="memory" cons={data.cons} onOpen={onOpenCon} memory={data.memory} />;
   return <ConWall key="round1" cons={data.cons} />;
 }

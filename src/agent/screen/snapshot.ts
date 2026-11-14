@@ -6,6 +6,8 @@ import type { StoreApi, StoreId } from '../../shared/contract';
 import type { AgentMetrics, IncidentDoc, MetricPoint } from '../auditor/auditor';
 import { sweepInterruptedEvaluations, type EvaluationDoc } from '../eval/record';
 import type { ConDoc } from '../memory/con-memory';
+import { TTL_INDEX } from '../memory/memory-rules';
+import { MEMORY_PROOFS, type MemoryProof } from '../memory-proof';
 import { AGENT_STATE, CONS, GUARDRAILS, INCIDENTS, ROLLOUTS, type AgentStateDoc, type GuardrailDoc } from '../rollout/state';
 import type { RolloutDoc } from '../rollout/runtimes';
 
@@ -48,12 +50,20 @@ export interface ScreenSnapshot {
   versions: { v: number; label: string; scamsPct: number; honestAwayPct: number; rejected: boolean }[];
   audits: AuditTrail[];
   flash: FlashSale | null;
+  memory: MemoryGovernance;
   results: null | {
     before: { version: number; scamsPct: number; honestAway: number };
     after: { version: number; scamsPct: number; honestAway: number };
     honestTotal: number;
     immunityMs: number | null;
   };
+}
+
+/** Memory you can govern, proven live: the last probe of the memory rules, the TTL index, forgotten shoppers. */
+export interface MemoryGovernance {
+  proof: null | { at: string; refused: boolean; code: number | null; message: string; collection: string; field: string };
+  ttlSeconds: number | null;        // the TTL index on conversations (86400 = 24 h)
+  forgotten: number;                // shoppers forgotten on request since the last reset
 }
 
 /** The flash sale (M4-05, stretch): 100 bots race for 10 hoodies in Atlas transactions. */
@@ -376,6 +386,18 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
     }
   }
 
+  // ── Memory governance: the latest probe, the TTL index, forgotten shoppers ──
+  const [proofDoc, convIndexes] = await Promise.all([
+    db.collection<MemoryProof>(MEMORY_PROOFS).find({}).sort({ at: -1 }).limit(1).next(),
+    db.collection('conversations').indexes().catch(() => [] as { name?: string; expireAfterSeconds?: number }[]),
+  ]);
+  const memory: MemoryGovernance = {
+    proof: proofDoc ? { at: proofDoc.at.toISOString(), refused: proofDoc.refused, code: proofDoc.code, message: proofDoc.message,
+      collection: proofDoc.collection, field: proofDoc.field } : null,
+    ttlSeconds: (convIndexes as { name?: string; expireAfterSeconds?: number }[]).find((i) => i.name === TTL_INDEX)?.expireAfterSeconds ?? null,
+    forgotten: 0,
+  };
+
   // ── Feed: the newest events, two lines each ──
   const catchupFeed = await db.collection<RolloutDoc>(ROLLOUTS)
     .find({ change: 'catchup', ...(sinceReset ? { appliedAt: { $gte: sinceReset } } : {}) }).sort({ appliedAt: -1 }).limit(3).toArray();
@@ -412,6 +434,11 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
       who: g.status === 'rejected' ? `v${g._id} rejected` : `Policy v${g._id} is live`,
       text: short(g.status === 'rejected' ? 'Failed the 120-case test' : promotedText(g, byVersion.get(g.parentVersion ?? 0))),
       amountCents: null, at: (g.promotedAt ?? g.createdAt).toISOString() })),
+    ...(memory.proof && new Date(memory.proof.at) >= epochStart ? [{
+      id: `p:${memory.proof.at}`, kind: (memory.proof.refused ? 'con-blocked' : 'con-worked') as FeedKind,
+      who: `Tried to store raw chat text in ${memory.proof.collection}`,
+      text: short(memory.proof.refused ? `Atlas refused it (code ${memory.proof.code})` : 'Atlas accepted it: check the validator'),
+      amountCents: null, at: memory.proof.at }] : []),
     ...(flash ? [{
       id: `f:${flash.at}`, kind: (flash.passed ? 'sale' : 'rule-rejected') as FeedKind, who: `Flash sale at ${STORE_NAME[flash.store]}`,
       text: short(flash.passed ? `${flash.attempted} shoppers, exactly ${flash.sold} sold` : 'A check failed: see the scene'),
@@ -437,7 +464,7 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
     : state?.change === 'promote' && sinceChange < 30_000 ? 'immunity'
     : activeVersion > 0 ? 'round2' : 'round1';
 
-  return { scene, activeVersion, epoch, tiles, feed, cons: conRows, learning, rollout, versions, audits, flash, results };
+  return { scene, activeVersion, epoch, tiles, feed, cons: conRows, learning, rollout, versions, audits, flash, memory, results };
 }
 
 /** One rollout per store for a change: duplicates (by store, version, change and changedAt) collapse to the fastest. */

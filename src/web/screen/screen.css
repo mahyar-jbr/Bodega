@@ -295,3 +295,23 @@
 .bs-stage[data-narrow] .bs-bots { grid-template-columns: repeat(20, 13px); gap: 12px 10px; }
 .bs-stage[data-narrow] .bs-hoodies { grid-template-columns: repeat(5, 48px); }
 .bs-stage[data-narrow] .bs-hoodie { height: 48px; }
+
+/* Memory proofs: what Atlas enforces, shown live */
+.bs-proofs { display: grid; gap: 8px; margin-top: 18px; }
+.bs-proof-row { display: flex; align-items: center; gap: 12px; color: var(--ink-2); padding: 8px 14px; border-radius: var(--radius-md); background: var(--glass-sheen); }
+.bs-proof-row .bs-dot { background: var(--tone); }
+.bs-proof-row[data-ok="true"] { --tone: var(--immune); }
+.bs-proof-row[data-ok="false"] { --tone: var(--loss); color: var(--loss); }
+/* The refusal moment: the attempt flashes red, then Atlas's refusal settles green. */
+.bs-proof-row[data-fresh][data-ok="true"] { animation: bs-refused 1.6s var(--ease-out); }
+@keyframes bs-refused {
+  0% { background: var(--loss-soft); box-shadow: inset 3px 0 0 var(--loss); }
+  45% { background: var(--loss-soft); box-shadow: inset 3px 0 0 var(--loss); }
+  100% { background: var(--glass-sheen); box-shadow: inset 3px 0 0 var(--immune); }
+}
+@media (prefers-reduced-motion: reduce) { .bs-proof-row[data-fresh] { animation: none; } }
+.bs-mem-rules[data-compact] .stage-label { display: none; }
+.bs-proof-row .bs-dot { flex: none; }
+.bs-mem-rules[data-compact] .stage-body { font-size: 26px; line-height: 1.3; white-space: nowrap; }
+.bs-mem-rules[data-compact] .bs-mem-rule { padding-top: 10px; }
+.bs-proofs .bs-proof-row { padding: 6px 14px; }

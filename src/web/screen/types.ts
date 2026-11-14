@@ -104,6 +104,7 @@ export interface VersionPoint { v: number; label: string; scamsPct: number; hone
 
 export type AuditData = import('../../agent/screen/snapshot').AuditTrail;
 export type FlashData = import('../../agent/screen/snapshot').FlashSale;
+export type MemoryData = import('../../agent/screen/snapshot').MemoryGovernance;
 
 export interface ScreenData {
   scene: Scene;
@@ -116,4 +117,5 @@ export interface ScreenData {
   versions: VersionPoint[];
   audits: AuditData[];
   flash: FlashData | null;
+  memory: MemoryData;
 }
