@@ -10,8 +10,10 @@ const KEY = 'test-eleven-key-123';
 const calls: { url: string; init: RequestInit }[] = [];
 let stt: () => Promise<Response>;
 let tts: () => Promise<Response>;
+let token: () => Promise<Response> = async () => Response.json({ token: 'single-use-abc' });
 const fakeFetch = async (url: string, init: RequestInit) => {
   calls.push({ url, init });
+  if (url.includes('/single-use-token/')) return token();
   return url.includes('/speech-to-text') ? stt() : tts();
 };
 
@@ -100,6 +102,30 @@ describe('voice line', () => {
     const failed = await upload();
     expect(failed.status).toBe(502);
     expect(await failed.json()).toEqual({ error: 'stt_failed', status: 500 });
+  });
+
+  it('mints a single-use live-transcript ticket without exposing the key, rate-limited per shopper', async () => {
+    const get = (q: string) => fetch(`${base}/api/voice/token${q}`);
+    vi.stubEnv('ELEVENLABS_API_KEY', '');
+    expect((await get('?shopperId=s-1')).status).toBe(501);
+    vi.stubEnv('ELEVENLABS_API_KEY', KEY);
+    expect((await get('')).status).toBe(400);
+    const res = await get('?shopperId=s-token-1');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    const ticket = await res.json();
+    expect(ticket).toMatchObject({ model: 'scribe_v3_live', audioFormat: 'pcm_16000', sampleRate: 16000, expiresInS: 900 });
+    const url = new URL(ticket.url);
+    expect(`${url.origin}${url.pathname}`).toBe('wss://api.elevenlabs.io/v1/speech-to-text/realtime');
+    expect(Object.fromEntries(url.searchParams)).toEqual({ model_id: 'scribe_v3_live', token: 'single-use-abc', audio_format: 'pcm_16000', language_code: 'en', commit_strategy: 'manual' });
+    expect(JSON.stringify(ticket)).not.toContain(KEY);
+    const mint = calls.find((c) => c.url.includes('/single-use-token/realtime_scribe'))!;
+    expect(mint.init.method).toBe('POST');
+    expect((mint.init.headers as Record<string, string>)['xi-api-key']).toBe(KEY);
+    expect((await get('?shopperId=s-token-1')).status).toBe(429);   // one every 3 seconds
+    token = async () => new Response('no', { status: 401 });
+    expect(await (await get('?shopperId=s-token-2')).json()).toEqual({ error: 'token_failed' });
+    token = async () => Response.json({ token: 'single-use-abc' });
   });
 
   it('makes replies natural to hear: prices, order numbers, no emoji or bullets', () => {

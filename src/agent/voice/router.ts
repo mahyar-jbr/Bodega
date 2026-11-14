@@ -7,12 +7,30 @@ import express, { Router } from 'express';
 import { AgentError, type AgentApi, type ChatErrorCode } from '../../shared/contract';
 import { isStoreId } from '../../shared/store-data';
 import { synthesize, transcribe, voiceConfig, VoiceError, type FetchLike } from './elevenlabs';
+import { createTokenLimiter, mintRealtimeTicket } from './realtime';
 
 export const MAX_VOICE_UPLOAD = '4mb';
 const STATUS: Record<ChatErrorCode, number> = { too_long: 400, rate_limited: 429, unknown_shopper: 404, store_offline: 503, unavailable: 503 };
 
 export function createVoiceRouter({ agent, fetchImpl }: { agent: AgentApi; fetchImpl?: FetchLike }): Router {
   const router = Router();
+  const allowToken = createTokenLimiter();
+
+  // GET /api/voice/token?shopperId=…: a single-use ticket for the live transcript (ElevenLabs realtime
+  // speech-to-text, straight from the browser). 501 without the key; 429 past the per-shopper limit.
+  router.get('/voice/token', async (req, res) => {
+    const config = voiceConfig();
+    if (!config) { res.status(501).json({ error: 'voice_off' }); return; }
+    const shopperId = typeof req.query.shopperId === 'string' ? req.query.shopperId.trim() : '';
+    if (!shopperId || shopperId.length > 200) { res.status(400).json({ error: 'bad_request', detail: 'shopperId is required' }); return; }
+    if (!allowToken(shopperId)) { res.status(429).json({ error: 'rate_limited' }); return; }
+    try {
+      res.set('cache-control', 'no-store').json(await mintRealtimeTicket(config, fetchImpl));
+    } catch (error) {
+      console.error(`voice token: ${(error as Error).message}`);
+      res.status(502).json({ error: 'token_failed' });
+    }
+  });
 
   router.post('/voice', express.raw({ type: 'multipart/form-data', limit: MAX_VOICE_UPLOAD }), async (req, res) => {
     const config = voiceConfig();
