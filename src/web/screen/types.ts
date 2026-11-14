@@ -55,9 +55,51 @@ export interface ConRow {
   blocked: number;
 }
 
+// The learning loop for the newest candidate version.
+export type LearningPhase = 'incident' | 'drafting' | 'testing' | 'promoted' | 'rejected';
+
+export interface TestProgress {
+  done: number; total: number;
+  scamsTested: number; scamsStopped: number;
+  honestTested: number; honestServed: number;
+}
+
+export interface LearningData {
+  phase: LearningPhase;
+  store: StoreKey;                       // where the con was first seen
+  incident: { summary: string; detail: string; lostCents: number };
+  guardrail: { version: number; rules: string[] };   // rule titles, in plain words
+  test: TestProgress;
+  scamsTotal: number; honestTotal: number;
+  settingsHash: string;                  // same model, same prompt
+  verdict: string | null;                // "Promoted: stops 58 of 60 scams, serves 59 of 60" or the rejection reason
+}
+
+// After a promotion (immune) or a rollback (forgotten): each store's time on the same clock.
+export interface RolloutData {
+  kind: 'immune' | 'forgot';
+  version: number;                       // promoted, or taken back
+  toVersion: number;                     // the version every store is on now
+  stores: { store: StoreKey; ms: number | null }[];   // null: not reported yet
+  scams: [stopped: number, total: number] | null;
+  honest: [served: number, total: number] | null;
+  learningPaused: boolean;
+}
+
+// Before and after on the held-out set, same settings hash.
+export interface ResultsData {
+  before: { version: number; scamsPct: number; honestAway: number };
+  after: { version: number; scamsPct: number; honestAway: number };
+  honestTotal: number;
+  immunityMs: number | null;
+}
+
 export interface ScreenData {
   scene: Scene;
   tiles: TileData[];
   feed: FeedItemData[];
   cons: ConRow[];
+  learning: LearningData | null;
+  rollout: RolloutData | null;
+  results: ResultsData | null;
 }
