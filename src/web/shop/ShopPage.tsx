@@ -312,7 +312,7 @@ export default function ShopPage() {
                   aria-label="Message the shopkeeper"
                   rows={1}
                   maxLength={MAX_MESSAGE_LENGTH}
-                  placeholder="Message the shopkeeper"
+                  placeholder="Message the shop"
                   value={draft}
                   disabled={sending}
                   onChange={(event) => setDraft(event.target.value)}

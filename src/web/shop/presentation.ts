@@ -16,5 +16,9 @@ export function policyLabel(policy: PolicyState, now = Date.now()) {
 }
 
 export function displayReply(text: string) {
-  return text.replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Modifier}\u200D\uFE0F\u20E3]/gu, '').replace(/[ \t]{2,}/g, ' ').trim();
+  return text.replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Modifier}\u200D\uFE0F\u20E3]/gu, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\s+([,.!?;:])/g, '$1')
+    .replace(/,(?=[.!?])/g, '')
+    .trim();
 }

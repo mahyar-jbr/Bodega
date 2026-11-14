@@ -22,3 +22,8 @@ it('removes shopkeeper emoji without changing prices, codes, or accents', () => 
   expect(displayReply('Enjoy! ☕🥧')).toBe('Enjoy!');
   expect(displayReply('Café 🇨🇦 costs $3.50; WELCOME10 saves 10%. 👍🏽')).toBe('Café costs $3.50; WELCOME10 saves 10%.');
 });
+
+it('cleans the exact punctuation artifacts reported in the voice check', () => {
+  expect(displayReply('Two butter tarts for you, 🥧. Your total was $7.00.')).toBe('Two butter tarts for you. Your total was $7.00.');
+  expect(displayReply('Here you go 🧋 , that is $2.50.')).toBe('Here you go, that is $2.50.');
+});
