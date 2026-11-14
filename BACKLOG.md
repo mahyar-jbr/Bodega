@@ -11,9 +11,9 @@
 | Phase | What it achieves | The check | By | Done |
 |---|---|---|---|---|
 | Before the event | The test data, a generic skeleton live on Render, and this plan, tagged `pre-event` | The live app's /api/health is green, and the tag is on GitHub | Fri Nov 13 | Done |
-| M1 | A real purchase through chat on a phone | M1-09, on the deployed app | 12:40 | 0 of 12 |
+| M1 | A real purchase through chat on a phone | M1-09, on the deployed app | 12:40 | 1 of 12 |
 | M2 | v0 gets conned, incidents and cons land in Atlas under the memory rules, and a version rolls out to every store and back | M2-09 | 14:20 | 0 of 13 |
-| M3 | The stores learn: a version is proven on the held-out set, goes live everywhere, and Roll back takes it back | M3-10, on the deployed app | 15:25 | 0 of 11 |
+| M3 | The stores learn: a version is proven on the held-out set, goes live everywhere, and Roll back takes it back | M3-10, on the deployed app | 15:25 | 1 of 11 |
 | M4 | The 3-minute demo works end to end, driven only by us, and is recorded | M4-10 | 16:00 | 0 of 6 |
 | Submit | Frozen, submitted and rehearsed | F06, submitted | 16:50 | 0 of 8 |
 
@@ -31,11 +31,11 @@ Hacking starts at 10:45 (nothing for Bodega is coded before). The contract lands
 
 | ID | Task | Done when | Owner | By | State |
 |---|---|---|---|---|---|
-| S05 | Contract and stand-ins | contract.ts (with rollback and learningPaused), money.ts, the stand-in agent and a first MemoryStore are pushed, and Kasra is told | Mahyar | 11:10 | In progress |
+| S05 | Contract and stand-ins | contract.ts (with rollback and learningPaused), money.ts, the stand-in agent and a first MemoryStore are pushed, and Kasra is told | Mahyar | 11:10 | Done |
 | M1-05 | Seed, indexes, validators | The seed, indexes and validators are in Kasra's database | Kasra A | 11:15 | Not started |
 | S07 | createAgent wired | Startup calls createAgent, and the app still builds and starts | Kasra A | 11:25 | Not started |
 | M1-10 | Databases seeded | bodega_mahyar and the deployed bodega database (on the sandbox) are seeded with Kasra's seed script | Mahyar | 11:30 | Not started |
-| M1-01 | MemoryStore | MemoryStore passes the shared contract tests (src/shared/store-contract.ts) | Mahyar | 11:35 | Not started |
+| M1-01 | MemoryStore | MemoryStore passes the shared contract tests (src/shared/store-contract.ts) | Mahyar | 11:35 | In progress |
 | M1-08 | Phone shop | /s/queen gives a nickname and $20, chats, and shows receipts and the wallet (live over SSE once M2-04 lands) | Kasra B | 11:50 | Not started |
 | M1-06 | AtlasStore | AtlasStore implements StoreApi with transactions, idempotency, order numbers and grants | Kasra A | 12:05 | Not started |
 | M1-02 | v0 shopkeeper | It buys and refunds on MemoryStore: frozen settings, a generous prompt with the catalog, two tools, the tool loop and refusal handling | Mahyar | 12:10 | Not started |
@@ -50,7 +50,7 @@ The store runtimes, rollback and reset come right after the guard, so the never-
 
 | ID | Task | Done when | Owner | By | State |
 |---|---|---|---|---|---|
-| M2-01 | Facts and valid basis | Tests built from data/README.md's rules pass. A refund on an order from the same conversation counts as a discount, and needs a valid discount basis unless it cancels the whole order | Mahyar | 11:35 | Not started |
+| M2-01 | Facts and valid basis | Tests built from data/README.md's rules pass. A refund on an order from the same conversation counts as a discount, and needs a valid discount basis unless it cancels the whole order | Mahyar | 11:35 | In progress |
 | M2-07 | Big screen v1 | It shows the stores, money lost and a live feed of incidents and cons, from /api/agent/state and then SSE | Mahyar | 12:50 | In progress |
 | M2-03 | Change bus | One change stream delivers every change, and it survives a reconnect | Kasra A | 12:55 | Not started |
 | M2-02 | Guard | Every money call is checked against the store's version (no rules at v0). A failed discount rule caps the discount at the valid percentage; other failed rules block | Mahyar | 13:00 | Not started |
