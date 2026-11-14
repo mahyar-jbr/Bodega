@@ -7,6 +7,8 @@ import { STORE_IDS } from '../shared/store-data';
 import { createAuditor, type Auditor } from './auditor/auditor';
 import { atlasConversations, conversationIdFor, type ConversationLog } from './conversations';
 import { V0 } from './guard/types';
+import { gate, gateDemo, runEvaluation } from './gate/gate';
+import { createLearner, type Learner } from './learner/learner';
 import { createConMemory, type ConMemory } from './memory/con-memory';
 import { ensureMemoryRules } from './memory/memory-rules';
 import { resetAgentState, rollbackActive } from './rollout/state';
@@ -37,6 +39,7 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
   let auditor: Auditor | null = null;
   let runtimes: StoreRuntimes | null = null;
   let conMemory: ConMemory | null = null;
+  let learner: Learner | null = null;
   const offlineBeforeStart = new Set<StoreId>();
 
   function requireRuntimes(): StoreRuntimes {
@@ -56,9 +59,11 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
       await ensureMemoryRules(deps.db);
       runtimes ??= createStoreRuntimes({ db: deps.db, bus: deps.bus });
       await runtimes.start();
-      conMemory ??= createConMemory({ db: deps.db });
+      // The learner starts 10 s after the first new con the active version doesn't cover.
+      conMemory ??= createConMemory({ db: deps.db, onNewCon: (con) => learner?.onNewCon(con) });
       await conMemory.start();
       const memory = conMemory;
+      learner ??= createLearner({ db: deps.db, conMemory: memory, gate: (n, opts) => gate({ db: deps.db }, n, opts) });
       auditor ??= createAuditor({ db: deps.db, store, bus: deps.bus,
         onIncident: (incident) => { memory.assign(incident).catch((e) => console.error('con memory: assign failed:', e)); } });
       await auditor.start();
@@ -127,9 +132,18 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
       return STORE_IDS.map((storeId) => ({ storeId, lostCents: 0, blockedCents: 0, perMinute: [] }));
     },
 
-    async learnNow() { return { started: false, reason: 'Learning is not built yet.' }; },
-    async runEval() { throw new AgentError('unavailable', 'Evaluations are not wired to the agent yet.'); },
-    async gateDemo() { throw new AgentError('unavailable', 'The gate demo is not built yet.'); },
+    async learnNow() {
+      if (!learner) throw new AgentError('unavailable', 'The agent has not started.');
+      return learner.learnNow();
+    },
+    async runEval(input) {
+      requireRuntimes();
+      return runEvaluation({ db: deps.db }, input);
+    },
+    async gateDemo() {
+      requireRuntimes();
+      return gateDemo({ db: deps.db });
+    },
     async rollback() {
       requireRuntimes();
       // Every store hears about it from the change bus (the slow poll is the safety net) and records
@@ -141,6 +155,7 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
       const r = requireRuntimes();
       await resetAgentState(deps.db);
       conMemory?.reset();
+      learner?.reset();
       sent.clear();
       await r.refresh();
     },
