@@ -44,7 +44,14 @@ export interface SeedSummary {
   members: number;
 }
 
-export function catalogDocuments(catalog: readonly (Product & { stock: number })[] = CATALOG): Document[] {
+export interface SeedProductDocument extends Product {
+  storeId: StoreId;
+  stock: number;
+}
+
+export function catalogDocuments(
+  catalog: readonly (Product & { stock: number })[] = CATALOG,
+): SeedProductDocument[] {
   return STORE_SEEDS.flatMap(({ storeId }) =>
     catalog.map((item) => {
       if (!item.sku.trim() || !item.name.trim() || !item.emoji.trim()) {
