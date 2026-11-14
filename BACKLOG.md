@@ -118,9 +118,9 @@ Frozen at 16:15, submitted by 16:50 (the deadline is 17:00), and rehearsed by 17
 | X2 | A voice hotline with ElevenLabs (it needs an ElevenLabs key) | Mahyar | Not started |
 | X3 | Atlas agent memory for regular customers | Mahyar | Not started |
 | X4 | An audit-trail panel for one con: its summary, ledger entries, incident and the version that blocks it | Mahyar | Done |
-| X5 | Approve before going live: with approvalRequired on, a proven version waits for a person to tap Approve (or Reject) before any store applies it | Mahyar | In progress |
-| X6 | Forget one shopper: their raw chats are deleted and their incidents anonymised, while the learned rules stay; counts shown | Mahyar | In progress |
-| X7 | Atlas refuses a leak, live: a probe tries to store raw chat text in incidents and schema validation rejects it (code 121) on screen | Mahyar | In progress |
+| X5 | Approve before going live: with approvalRequired on, a proven version waits for a person to tap Approve (or Reject) before any store applies it | Mahyar | Done |
+| X6 | Forget one shopper: their raw chats are deleted and their incidents anonymised, while the learned rules stay; counts shown | Mahyar | Done |
+| X7 | Atlas refuses a leak, live: a probe tries to store raw chat text in incidents and schema validation rejects it (code 121) on screen | Mahyar | Done |
 | M4-05 | Flash sale: the limited hoodie is restocked to 10, then 100 bot buyers race for it; exactly 10 sell, and every wallet matches its ledger | Kasra A | Done |
 | M4-09 | The flash sale's result on the big screen | Mahyar | Done |
 
