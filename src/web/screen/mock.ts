@@ -8,8 +8,8 @@ export const MOCK: ScreenData = {
   scene: 'round1',
   tiles: [
     { store: 'queen', status: 'conned', policy: 0, learnedAt: null, lostCents: 3850, blocked: 0, immuneInMs: null },
-    { store: 'yonge', status: 'conned', policy: 0, learnedAt: null, lostCents: 2100, blocked: 0, immuneInMs: null },
-    { store: 'scarborough', status: 'idle', policy: 0, learnedAt: null, lostCents: 0, blocked: 0, immuneInMs: null },
+    { store: 'yonge', status: 'immune', policy: 1, learnedAt: ago(90), lostCents: 2100, blocked: 2, immuneInMs: null, caughtUpMs: 12_400 },
+    { store: 'scarborough', status: 'offline', policy: 0, learnedAt: null, lostCents: 0, blocked: 0, immuneInMs: null, missed: 1 },
   ],
   feed: [
     { id: 'f5', kind: 'con-worked', who: 'Sneaky Raccoon', text: 'Conned Queen St, fake code', amountCents: -950, at: ago(20) },

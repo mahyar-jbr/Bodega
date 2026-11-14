@@ -14,7 +14,7 @@ const STORE_NAME: Record<StoreId, string> = { queen: 'Queen St', yonge: 'Yonge S
 const FEED_MAX = 8;
 
 export type Scene = 'round1' | 'learning' | 'immunity' | 'round2' | 'memory';
-export type StoreStatus = 'idle' | 'conned' | 'learning' | 'immune';
+export type StoreStatus = 'idle' | 'conned' | 'learning' | 'immune' | 'offline';
 export type FeedKind = 'sale' | 'con-worked' | 'con-blocked' | 'rule-promoted' | 'rule-rejected' | 'learning' | 'rollback';
 
 export interface ScreenSnapshot {
@@ -22,7 +22,9 @@ export interface ScreenSnapshot {
   activeVersion: number;
   epoch: number;
   tiles: { store: StoreId; status: StoreStatus; policy: number; learnedAt: string | null; lostCents: number;
-    lostCount: number; blocked: number; blockedCents: number; immuneInMs: number | null; online: boolean }[];
+    lostCount: number; blocked: number; blockedCents: number; immuneInMs: number | null; online: boolean;
+    missed: number | null;           // offline and behind: the active version it hasn't applied
+    caughtUpMs: number | null }[];   // back online: how long after the missed promotion it caught up
   feed: { id: string; kind: FeedKind; who: string; text: string; amountCents: number | null; at: string }[];
   cons: { id: string; summary: string; firstSeen: StoreId; worked: number; blocked: number; coveredBy: number | null }[];
   learning: null | {
@@ -38,7 +40,7 @@ export interface ScreenSnapshot {
   };
   rollout: null | {
     kind: 'immune' | 'forgot'; version: number; toVersion: number; at: string;
-    stores: { store: StoreId; ms: number | null }[];
+    stores: { store: StoreId; ms: number | null; caughtUp?: boolean }[];
     scams: [number, number] | null; honest: [number, number] | null;
     learningPaused: boolean;
   };
@@ -135,7 +137,11 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
   ]);
 
   // One row per store for the current change, even if a store reported it more than once (keep its first report).
-  const rollouts = dedupeRollouts(rolloutRows, state?.activeVersion ?? 0);
+  const allRollouts = dedupeRollouts(rolloutRows, state?.activeVersion ?? 0);
+  // Stores that were online applied the change live; a store that was offline catches up later (X1),
+  // measured from the same promotion. Keep them apart: catch-ups don't count as time to immunity.
+  const rollouts = allRollouts.filter((r) => r.change !== 'catchup');
+  const catchups = allRollouts.filter((r) => r.change === 'catchup');
 
   const byVersion = new Map(guardrails.map((g) => [g._id, g]));
   const sinceReset = state?.change === 'reset' ? state.changedAt : null;
@@ -212,7 +218,11 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
     rollout = {
       kind: state.change === 'promote' ? 'immune' : 'forgot',
       version: fromVersion, toVersion: state.activeVersion, at: state.changedAt.toISOString(),
-      stores: STORES.map((store) => ({ store, ms: rollouts.find((r) => r.storeId === store)?.ms ?? null })),
+      stores: STORES.map((store) => {
+        const live = rollouts.find((r) => r.storeId === store);
+        const late = catchups.find((r) => r.storeId === store);
+        return live ? { store, ms: live.ms } : late ? { store, ms: late.ms, caughtUp: true } : { store, ms: null };
+      }),
       scams: gate ? [gate.scams.stopped, gate.scams.total] : null,
       honest: gate ? [gate.honest.served + gate.honest.leaks, gate.honest.total] : null,
       learningPaused: state.learningPaused,
@@ -225,12 +235,16 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
   const after = activeVersion > 0 ? recentEvals.find((e) => e.version === activeVersion && e.status === 'done' && e.summary) : undefined;
   if (baselines.length && after?.summary) {
     const worst = baselines.reduce((a, b) => (b.summary!.honest.turnedAway > a.summary!.honest.turnedAway ? b : a));
+    // Time to immunity: the slowest live report, once every store that was online has reported. A store that
+    // was offline (it caught up later, or is still offline) doesn't hold the number back.
     const promoteMs = state?.change === 'promote' ? rollouts.map((r) => r.ms) : [];   // one per store
+    const offline = new Set(deps.stores().filter((r) => !r.online).map((r) => r.storeId));
+    const awaited = STORES.filter((st) => !offline.has(st) && !catchups.some((c) => c.storeId === st)).length;
     results = {
       before: { version: 0, scamsPct: worst.summary!.scams.successPct, honestAway: worst.summary!.honest.turnedAway },
       after: { version: activeVersion, scamsPct: after.summary.scams.successPct, honestAway: after.summary.honest.turnedAway },
       honestTotal: after.summary.honest.total,
-      immunityMs: promoteMs.length === STORES.length ? Math.max(...promoteMs) : null,
+      immunityMs: promoteMs.length > 0 && promoteMs.length >= awaited ? Math.max(...promoteMs) : null,
     };
   }
 
@@ -286,18 +300,24 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
     const m = metrics.find((x) => x.storeId === store);
     const applied = rt?.appliedVersion ?? 0;
     const lostCount = m?.lostCount ?? 0;
-    const status: StoreStatus = applied > 0 ? 'immune'
+    const online = rt?.online ?? true;
+    const status: StoreStatus = !online ? 'offline'
+      : applied > 0 ? 'immune'
       : learning && (learning.phase === 'drafting' || learning.phase === 'testing') && lostCount > 0 ? 'learning'
       : lostCount > 0 ? 'conned' : 'idle';
     const promoted = applied > 0 ? byVersion.get(applied)?.promotedAt ?? null : null;
     return {
       store, status, policy: applied, learnedAt: iso(promoted), lostCents: m?.lostCents ?? 0, lostCount,
-      blocked: m?.blockedCount ?? 0, blockedCents: m?.blockedCents ?? 0, online: rt?.online ?? true,
+      blocked: m?.blockedCount ?? 0, blockedCents: m?.blockedCents ?? 0, online,
       immuneInMs: state?.change === 'promote' ? rollouts.find((r) => r.storeId === store)?.ms ?? null : null,
+      missed: !online && activeVersion > applied ? activeVersion : null,
+      caughtUpMs: online ? catchups.find((r) => r.storeId === store)?.ms ?? null : null,
     };
   });
 
   // ── Feed: the newest events, two lines each ──
+  const catchupFeed = await db.collection<RolloutDoc>(ROLLOUTS)
+    .find({ change: 'catchup', ...(sinceReset ? { appliedAt: { $gte: sinceReset } } : {}) }).sort({ appliedAt: -1 }).limit(3).toArray();
   const conned = new Set(incidents.map((i) => i.orderNumber).filter(Boolean));
   const nicknames = new Map<string, string>();
   await Promise.all([...new Set(orders.map((o) => String(o.shopperId)))].map(async (id) => {
@@ -331,6 +351,10 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
       who: g.status === 'rejected' ? `v${g._id} rejected` : `Policy v${g._id} is live`,
       text: short(g.status === 'rejected' ? 'Failed the 120-case test' : promotedText(g, byVersion.get(g.parentVersion ?? 0))),
       amountCents: null, at: (g.promotedAt ?? g.createdAt).toISOString() })),
+    ...catchupFeed.map((r) => ({
+      id: `c:${r.storeId}:${r.version}:${new Date(r.changedAt).getTime()}`, kind: 'rule-promoted' as const,
+      who: `${STORE_NAME[r.storeId]} is back online`,
+      text: short(`and caught up on v${r.version}`), amountCents: null, at: new Date(r.appliedAt).toISOString() })),
     ...(state?.rollbacks ?? []).map((r) => ({
       id: `r:${r.at.toISOString()}`, kind: 'rollback' as const, who: `Policy v${r.from} taken back`,
       text: short(`Every store back on v${r.to}`), amountCents: null, at: r.at.toISOString() })),

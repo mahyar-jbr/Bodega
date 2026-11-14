@@ -280,3 +280,5 @@
 .st-frame { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; visibility: hidden; }
 .st-frame[data-active="true"] { visibility: visible; }
 .bs-rule[data-new]::before { content: "New \201C"; color: var(--brand-ink); }
+.bs-state[data-tone="offline"] { --tone: var(--ink-3); }
+.bs-tile[data-status="offline"] .bs-tile-name, .bs-tile[data-status="offline"] .bs-tile-numbers { opacity: 0.45; }

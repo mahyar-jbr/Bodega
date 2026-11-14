@@ -129,7 +129,7 @@ export function RolloutPanel({ data }: { data: RolloutData }) {
           <div key={s.store} className="bs-tl-row stage-body" style={{ top: `${tops.get(s.store)}%`, opacity: s.ms == null ? 0.35 : 1 }}>
             <span className="bs-tl-t bd-num bs-quiet">{s.ms == null ? '…' : seconds(s.ms)}</span>
             <span className="bs-tl-dot" data-state={s.ms == null ? 'waiting' : 'done'} />
-            <AwningMark store={s.store} width={30} /> {storeName(s.store)}
+            <AwningMark store={s.store} width={30} /> {storeName(s.store)}{s.caughtUp ? <span className="bs-quiet">, caught up</span> : null}
           </div>
         ))}
       </div>

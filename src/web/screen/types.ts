@@ -24,7 +24,7 @@ export const SCENES: { key: Scene; label: string }[] = [
   { key: 'audit', label: 'Audit trail' },   // key 6; not a beat in the header
 ];
 
-export type StoreStatus = 'idle' | 'conned' | 'learning' | 'immune';
+export type StoreStatus = 'idle' | 'conned' | 'learning' | 'immune' | 'offline';
 
 export interface TileData {
   store: StoreKey;
@@ -34,6 +34,8 @@ export interface TileData {
   lostCents: number;
   blocked: number; // cons blocked
   immuneInMs: number | null; // appliedAt - promotedAt for the current version
+  missed?: number | null;    // offline and behind: the active version it hasn't applied
+  caughtUpMs?: number | null; // back online: how long after the missed promotion it caught up
 }
 
 export type FeedKind = 'sale' | 'con-worked' | 'con-blocked' | 'rule-promoted' | 'rule-rejected' | 'learning' | 'rollback';
@@ -82,7 +84,7 @@ export interface RolloutData {
   kind: 'immune' | 'forgot';
   version: number;                       // promoted, or taken back
   toVersion: number;                     // the version every store is on now
-  stores: { store: StoreKey; ms: number | null }[];   // null: not reported yet
+  stores: { store: StoreKey; ms: number | null; caughtUp?: boolean }[];   // null: not reported yet; caughtUp: it was offline
   scams: [stopped: number, total: number] | null;
   honest: [served: number, total: number] | null;
   learningPaused: boolean;

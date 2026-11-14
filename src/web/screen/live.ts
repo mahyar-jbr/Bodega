@@ -19,7 +19,7 @@ export function fromSnapshot(s: ScreenSnapshot): ScreenData {
   return {
     scene: s.scene,
     tiles: s.tiles.map((t) => ({ store: t.store, status: t.status, policy: t.policy, learnedAt: t.learnedAt ? new Date(t.learnedAt) : null,
-      lostCents: t.lostCents, blocked: t.blocked, immuneInMs: t.immuneInMs })),
+      lostCents: t.lostCents, blocked: t.blocked, immuneInMs: t.immuneInMs, missed: t.missed, caughtUpMs: t.caughtUpMs })),
     feed: s.feed.map((f) => ({ ...f, at: new Date(f.at) })),
     cons: s.cons,
     learning: s.learning,

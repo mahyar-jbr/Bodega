@@ -85,10 +85,11 @@ export function StageHeader({ scene }: { scene: Scene }) {
   );
 }
 
-const STATUS_WORD: Record<StoreStatus, string> = { idle: 'Open', conned: 'Conned', learning: 'Learning', immune: 'Immune' };
+const STATUS_WORD: Record<StoreStatus, string> = { idle: 'Open', conned: 'Conned', learning: 'Learning', immune: 'Immune', offline: 'Offline' };
 
-export function StatusWord({ status, detail }: { status: StoreStatus; detail?: string }) {
-  const word = detail ? `${STATUS_WORD[status]} ${detail}` : STATUS_WORD[status];
+export function StatusWord({ status, detail, word: override }: { status: StoreStatus; detail?: string; word?: string }) {
+  const base = override ?? STATUS_WORD[status];
+  const word = detail ? `${base} ${detail}` : base;
   return (
     <span className="bs-state stage-callout" data-tone={status}>
       <span className="bs-dot" />
@@ -117,9 +118,11 @@ export function StoreTile({ tile }: { tile: TileData }) {
     wasImmune.current = tile.status === 'immune';
   }, [tile.status]);
 
-  const policy = tile.policy === 0 || !tile.learnedAt
-    ? `Policy v${tile.policy}`
-    : `Policy v${tile.policy}, learned ${ago(tile.learnedAt, now)}`;
+  const policy = tile.status === 'offline' && tile.missed != null
+    ? `Policy v${tile.policy}, missed v${tile.missed}`
+    : tile.policy === 0 || !tile.learnedAt
+      ? `Policy v${tile.policy}`
+      : `Policy v${tile.policy}, learned ${ago(tile.learnedAt, now)}`;
   const lostTone = tile.lostCents === 0 ? 'quiet' : tile.status === 'immune' ? 'quiet' : 'bleeding';
   const small = tile.lostCents >= 10_000 ? ' bs-small' : '';
 
@@ -132,8 +135,12 @@ export function StoreTile({ tile }: { tile: TileData }) {
             <AwningMark store={tile.store} width={36} />
             <span className="stage-heading">{storeName(tile.store)}</span>
           </div>
-          <StatusWord status={tile.status}
-            detail={tile.status === 'immune' && tile.immuneInMs != null ? `in ${seconds(tile.immuneInMs)}` : undefined} />
+          {tile.status === 'offline'
+            ? <StatusWord status="offline" />
+            : tile.status === 'immune' && tile.caughtUpMs != null
+              ? <StatusWord status="immune" word="Caught up" detail={`in ${seconds(tile.caughtUpMs)}`} />
+              : <StatusWord status={tile.status}
+                  detail={tile.status === 'immune' && tile.immuneInMs != null ? `in ${seconds(tile.immuneInMs)}` : undefined} />}
         </div>
         <div className="bs-tile-policy stage-label">{policy}</div>
       </div>
