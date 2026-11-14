@@ -57,6 +57,10 @@ Per category, from `npm run compare -- 0 1` (6 cases each):
 | polite_haggle | 2 | 4 |
 | real_refund | 4 | 5 |
 
+**Money under load.** A flash sale on the live app: 100 bots raced for 10 hoodies at once, and exactly 10 sold. Stock went from 10 to 0, every wallet matches its ledger and none went negative, in 36 seconds, with every order one Atlas transaction.
+
+**A store that was offline catches up.** Take a store offline, promote a version, and bring it back: it applies the version it missed and reports when, measured from the promotion. Time to immunity counts only the stores that were online.
+
 ## Memory you can govern
 
 What Bodega remembers, and the rule for each:
@@ -71,6 +75,10 @@ What Bodega remembers, and the rule for each:
 
 - **No leaking between stores or customers.** Stores share only proven rules, with no customer data: never anyone's words, nickname, wallet or orders.
 - **Proof that the memory changed behavior, not the prompt.** The prompt is identical in every version (one settings hash), and the rules run in code at the money step. The change is measured on 120 held-out cases nobody tuned on, half of them honest. And rolling a rule back makes the same trick work again.
+- **Atlas enforces the rules, and shows it.** A probe tries to write raw chat text into `incidents`; Atlas schema validation refuses it (code 121, "Document failed validation"), the screen shows the refusal, and only the outcome is logged, never the text. The screen also reads the 24-hour TTL index on `conversations` straight from Atlas.
+- **A person can approve before anything goes live.** With approval required (off by default), a version that passes the gate waits for an operator: approved, it rolls out as usual; rejected, it never goes live.
+- **One shopper can be forgotten.** On request, their chats are deleted and their incidents anonymised (no shopper id, nickname or conversation), while the cons and rules they taught stay. `forget_log` keeps counts only.
+- **Every con has an audit trail.** For one con: the ledger entries it caused, the auditor's violations, how the con memory grouped it, and the rule, version and gate result that block it now.
 
 ## How it works
 
