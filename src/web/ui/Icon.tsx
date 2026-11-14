@@ -56,8 +56,8 @@ export function Icon({ name, size = 24, label }: { name: IconName; size?: number
       style={{
         width: size,
         height: size,
-        WebkitMaskImage: `url(${icons[name]})`,
-        maskImage: `url(${icons[name]})`,
+        WebkitMaskImage: `url("${icons[name]}")`,
+        maskImage: `url("${icons[name]}")`,
       }}
     />
   );
