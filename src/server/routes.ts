@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
-import { Router, type RequestHandler, type Response } from 'express';
+import { Router, type Request, type RequestHandler, type Response } from 'express';
 import type { Db } from 'mongodb';
 import { z } from 'zod';
 import type { FlashSale } from '../bots/flash';
@@ -55,9 +55,11 @@ export interface RouteDeps {
   opsAutomation?: OpsAutomation;
   flash?: FlashSale;
   resetData?: () => Promise<unknown>;
+  /** The clock for the open-ops limits (tests). */
+  now?: () => number;
 }
 
-export function createApiRouter({ store, agent, db, opsAutomation, flash, resetData }: RouteDeps): Router {
+export function createApiRouter({ store, agent, db, opsAutomation, flash, resetData, now = Date.now }: RouteDeps): Router {
   const router = Router();
   const resetDataStore = resetData ?? (() => resetStoreData(db));
   const flashJobs = flash ? createFlashJobs(flash, db) : null;
@@ -111,7 +113,7 @@ export function createApiRouter({ store, agent, db, opsAutomation, flash, resetD
     res.json(await agent.metrics());
   });
 
-  router.use('/ops', requireOpsPassword);
+  router.use('/ops', createOpsGate(now));
 
   router.post('/ops/approval', async (req, res) => {
     const input = approvalSchema.safeParse(req.body);
@@ -222,27 +224,81 @@ export function createApiRouter({ store, agent, db, opsAutomation, flash, resetD
   return router;
 }
 
-const requireOpsPassword: RequestHandler = (req, res, next) => {
-  // OPS_OPEN=true is a demo-day switch: the ops routes take no password. Off unless set exactly.
-  if (process.env.OPS_OPEN?.trim() === 'true') {
-    next();
-    return;
-  }
+type PasswordCheck = 'ok' | 'not_configured' | 'wrong';
+
+function checkOpsPassword(req: Request): PasswordCheck {
   const expected = process.env.OPS_PASSWORD;
-  if (!expected) {
-    res.status(503).json({ error: 'ops_not_configured' });
-    return;
-  }
+  if (!expected) return 'not_configured';
   const supplied = req.get('x-ops-password') ?? '';
   const expectedBytes = Buffer.from(expected);
   const suppliedBytes = Buffer.from(supplied);
-  const valid = expectedBytes.length === suppliedBytes.length && timingSafeEqual(expectedBytes, suppliedBytes);
-  if (!valid) {
-    res.status(401).json({ error: 'unauthorized' });
-    return;
+  return expectedBytes.length === suppliedBytes.length && timingSafeEqual(expectedBytes, suppliedBytes) ? 'ok' : 'wrong';
+}
+
+export type OpenOpsPolicy =
+  | { kind: 'password' }
+  | { kind: 'open' }
+  | { kind: 'global'; everyMs: number }
+  | { kind: 'perIp'; max: number; windowMs: number };
+
+const PER_IP = { kind: 'perIp', max: 10, windowMs: 60_000 } as const;
+
+/** With OPS_OPEN=true, what an ops route needs without the password. Anything that spends money or
+ *  floods the app (eval, gate-demo, learn-now, crowd/start, flash), and any route not listed here,
+ *  still needs it. */
+export function openOpsPolicy(method: string, path: string): OpenOpsPolicy {
+  if (method === 'GET') return { kind: 'open' };                     // status reads
+  const p = path.toLowerCase().replace(/\/+$/, '') || '/';
+  switch (p) {
+    case '/opening': return { kind: 'global', everyMs: 60_000 };     // starts learning and a gate run
+    case '/reset': return { kind: 'global', everyMs: 10_000 };
+    case '/rollback': return { kind: 'global', everyMs: 5_000 };
+    case '/approval': case '/approve': case '/reject': case '/forget-shopper': case '/prove-memory-rules': case '/crowd/stop':
+      return PER_IP;
   }
-  next();
-};
+  if (/^\/store\/[^/]+\/online$/.test(p)) return PER_IP;
+  return { kind: 'password' };
+}
+
+/** The ops routes' gate. The right password always passes, with no limits. With OPS_OPEN=true (a
+ *  demo-day switch, off unless set exactly), the demo buttons work without it, within the limits above. */
+function createOpsGate(now: () => number): RequestHandler {
+  const lastAt = new Map<string, number>();
+  const hits = new Map<string, number[]>();
+  return (req, res, next) => {
+    const password = checkOpsPassword(req);
+    if (password === 'ok') { next(); return; }
+    if (process.env.OPS_OPEN?.trim() === 'true') {
+      const policy = openOpsPolicy(req.method, req.path);
+      if (policy.kind !== 'password') {
+        const t = now();
+        let waitMs = 0;
+        if (policy.kind === 'global') {
+          const key = req.path.toLowerCase().replace(/\/+$/, '');
+          const last = lastAt.get(key);
+          if (last !== undefined && t - last < policy.everyMs) waitMs = policy.everyMs - (t - last);
+          else lastAt.set(key, t);
+        } else if (policy.kind === 'perIp') {
+          const key = req.ip ?? req.socket.remoteAddress ?? 'unknown';
+          const recent = (hits.get(key) ?? []).filter((at) => t - at < policy.windowMs);
+          if (recent.length >= policy.max) waitMs = policy.windowMs - (t - recent[0]);
+          else recent.push(t);
+          hits.set(key, recent);
+          if (hits.size > 10_000) for (const [k, v] of hits) if (v.every((at) => t - at >= policy.windowMs)) hits.delete(k);
+        }
+        if (waitMs > 0) {
+          const seconds = Math.ceil(waitMs / 1000);
+          res.set('retry-after', String(seconds)).status(429).json({ error: 'rate_limited', detail: `wait ${seconds} s`, retryAfterS: seconds });
+          return;
+        }
+        next();
+        return;
+      }
+    }
+    if (password === 'not_configured') { res.status(503).json({ error: 'ops_not_configured' }); return; }
+    res.status(401).json({ error: 'unauthorized' });
+  };
+}
 
 function invalid(res: Response) {
   return res.status(400).json({ error: 'invalid_request' });
