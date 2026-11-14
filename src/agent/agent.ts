@@ -14,6 +14,7 @@ import { ensureMemoryRules } from './memory/memory-rules';
 import { resetAgentState, rollbackActive } from './rollout/state';
 import { createStoreRuntimes, type StoreRuntimes } from './rollout/runtimes';
 import { screenSnapshot } from './screen/snapshot';
+import { STORE_NAMES } from './shopkeeper/prompt';
 import { runShopkeeper } from './shopkeeper/run';
 import { SETTINGS_HASH } from './shopkeeper/settings';
 
@@ -107,8 +108,13 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
               .catch((e) => console.error('recordBlocked failed:', e));
           }
         }
+        // The shared memory speaks for itself: when this store blocked a trick another store saw
+        // first, the phone shows it under the shopkeeper's reply. Display only: it isn't added to the
+        // model's history, and evaluations never pass through here.
+        const seen = result.blocked.find((b) => b.firstSeenStore)?.firstSeenStore;
+        const note = seen ? `\n\n🛡 Bodega memory: ${STORE_NAMES[seen]} saw this trick first. Every Bodega store now blocks it.` : '';
         return {
-          reply: result.reply,
+          reply: result.reply + note,
           actions: result.actions,
           blocked: result.blocked.map(({ ruleId, title, firstSeenStore }) => ({ ruleId, title, firstSeenStore })),
           walletCents: result.walletCents,
