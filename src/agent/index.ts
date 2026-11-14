@@ -7,7 +7,9 @@ export function createAgent(deps: AgentDeps): AgentApi {
   return createStandInAgent(deps);
 }
 
-export { runShopkeeper } from './shopkeeper/run';
+export { hasModelKey, runShopkeeper } from './shopkeeper/run';
+export { SETTINGS_HASH, settingsHash, SHOPKEEPER_SETTINGS } from './shopkeeper/settings';
 export type { RunShopkeeperInput, RunShopkeeperResult, ShopkeeperMessage, TranscriptEntry } from './shopkeeper/run';
 export { V0, MAX_RULES } from './guard/types';
+export type { GuardDecision, MoneyCall } from './guard/check';
 export type { Condition, FactCondition, FactName, Facts, FactValue, GuardrailVersion, Rule } from './guard/types';

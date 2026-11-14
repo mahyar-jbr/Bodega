@@ -1,5 +1,5 @@
 import type { Db } from 'mongodb';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentError } from '../shared/contract';
 import { MemoryStore } from '../shared/memory-store';
 import { createAgent, runShopkeeper, V0 } from './index';
@@ -7,6 +7,9 @@ import { createAgent, runShopkeeper, V0 } from './index';
 const bus = { on: () => () => {} };
 
 describe('stand-in agent', () => {
+  // Keyless: these tests never call the model.
+  beforeEach(() => { vi.stubEnv('ANTHROPIC_API_KEY', ''); });
+
   it('rings up what a message names, for real', async () => {
     const store = new MemoryStore();
     const agent = createAgent({ store, db: {} as Db, bus });
