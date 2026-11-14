@@ -7,7 +7,6 @@ import { AtlasStore } from '../store/atlas-store';
 import { createApp } from './app';
 
 const port = Number(process.env.PORT) || 3000;
-const app = createApp();
 
 // ── Change bus ──────────────────────────────────────────────────────────────────────
 // One database-level stream per process, fanned out to collection subscribers.
@@ -19,6 +18,7 @@ await bus.start();
 const store = new AtlasStore(db);
 const agent = createAgent({ store, db, bus });
 await agent.start();
+const app = createApp({ realtime: { agent, bus } });
 
 const server = app.listen(port, (error?: Error) => {
   if (error) {

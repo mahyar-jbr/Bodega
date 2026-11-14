@@ -2,11 +2,13 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type ErrorRequestHandler, type Express } from 'express';
+import { createRealtimeRouter, type RealtimeRouteDeps } from '../realtime/routes';
 import { pingDb } from '../shared/db';
 
 const DEFAULT_DIST = fileURLToPath(new URL('../../dist', import.meta.url));
 
-export function createApp({ distDir = DEFAULT_DIST }: { distDir?: string } = {}): Express {
+export function createApp({ distDir = DEFAULT_DIST, realtime }:
+  { distDir?: string; realtime?: RealtimeRouteDeps } = {}): Express {
   const app = express();
   app.disable('x-powered-by');
   app.use(express.json({ limit: '32kb' }));
@@ -18,6 +20,7 @@ export function createApp({ distDir = DEFAULT_DIST }: { distDir?: string } = {})
   });
 
   // ── API routes are mounted here, above the 404 below. ──
+  if (realtime) app.use(createRealtimeRouter(realtime));
 
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'not_found' });
