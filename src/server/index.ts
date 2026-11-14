@@ -1,10 +1,12 @@
 // Startup: settings first, then the app, the change bus and the agent, then listen.
 import './env';
 import { createAgent } from '../agent';
+import { createCrowdBot } from '../bots/crowd';
 import { MongoChangeBus } from '../realtime/change-bus';
 import { closeDb, getDb, pingDb } from '../shared/db';
 import { AtlasStore } from '../store/atlas-store';
 import { createApp } from './app';
+import type { OpsAutomation } from './routes';
 
 const port = Number(process.env.PORT) || 3000;
 
@@ -18,7 +20,14 @@ await bus.start();
 const store = new AtlasStore(db);
 const agent = createAgent({ store, db, bus });
 await agent.start();
-const app = createApp({ api: { store, agent, db }, realtime: { bus } });
+const crowd = createCrowdBot({ agent, store, db });
+const opsAutomation: OpsAutomation = {
+  opening: (storeId) => crowd.opening({ storeId }),
+  startCrowd: (storeId) => crowd.startCrowd({ storeId }),
+  stopCrowd: () => crowd.stopCrowd(),
+  status: () => crowd.status(),
+};
+const app = createApp({ api: { store, agent, db, opsAutomation }, realtime: { bus } });
 
 const server = app.listen(port, (error?: Error) => {
   if (error) {

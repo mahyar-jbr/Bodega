@@ -17,6 +17,7 @@ const OPS_ENDPOINTS = {
   opening: '/api/ops/opening',
   crowdStart: '/api/ops/crowd/start',
   crowdStop: '/api/ops/crowd/stop',
+  crowdStatus: '/api/ops/crowd/status',
 } as const;
 
 type AgentState = Awaited<ReturnType<AgentApi['state']>>;
@@ -124,6 +125,24 @@ export default function OpsPage() {
     const timer = window.setInterval(() => void refreshOverview(), 5_000);
     return () => window.clearInterval(timer);
   }, [refreshOverview]);
+
+  useEffect(() => {
+    if (!unlocked) return;
+    let cancelled = false;
+    const refreshCrowd = async () => {
+      try {
+        const status = await apiJson<{ running: boolean }>(OPS_ENDPOINTS.crowdStatus, {
+          headers: { 'x-ops-password': password },
+        });
+        if (!cancelled) setCrowdRunning(status.running);
+      } catch {
+        // Preserve the last known state until the next successful refresh.
+      }
+    };
+    void refreshCrowd();
+    const timer = window.setInterval(() => void refreshCrowd(), 5_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [password, unlocked]);
 
   useEffect(() => {
     if (!unlocked) return;

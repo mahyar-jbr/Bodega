@@ -60,6 +60,7 @@ const opsAutomation = {
   opening: vi.fn(async (storeId) => ({ kind: 'opening', storeId })),
   startCrowd: vi.fn(async (storeId) => ({ kind: 'crowd', status: 'running', storeId })),
   stopCrowd: vi.fn(async () => ({ kind: 'crowd', status: 'stopped' })),
+  status: vi.fn(() => ({ running: true, runId: 'crowd-1', storeId: 'yonge' as const, active: 2 })),
 } satisfies OpsAutomation;
 const resetData = vi.fn(async () => ({ shoppersDeleted: 1 }));
 
@@ -147,6 +148,15 @@ describe('password-protected ops routes', () => {
   it('rejects a missing or wrong password', async () => {
     expect((await request('/api/ops/reset', { method: 'POST' })).status).toBe(401);
     expect((await request('/api/ops/reset', { method: 'POST', headers: { 'x-ops-password': 'wrong' } })).status).toBe(401);
+    expect((await request('/api/ops/crowd/status')).status).toBe(401);
+  });
+
+  it('reads the running crowd without starting a model run', async () => {
+    const response = await request('/api/ops/crowd/status', { headers: { 'x-ops-password': 'test-password' } });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ running: true, runId: 'crowd-1', storeId: 'yonge', active: 2 });
+    expect(opsAutomation.startCrowd).not.toHaveBeenCalled();
+    expect(opsAutomation.opening).not.toHaveBeenCalled();
   });
 
   it('calls the final agent action table', async () => {

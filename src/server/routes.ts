@@ -39,6 +39,7 @@ export interface OpsAutomation {
   opening(storeId: StoreId): Promise<unknown>;
   startCrowd(storeId: StoreId): Promise<unknown>;
   stopCrowd(): Promise<unknown>;
+  status(): { running: boolean; runId?: string; storeId?: StoreId; active?: number };
 }
 
 export interface RouteDeps {
@@ -133,6 +134,11 @@ export function createApiRouter({ store, agent, db, opsAutomation, resetData }: 
   router.post('/ops/crowd/stop', async (_req, res) => {
     if (!opsAutomation) return unavailable(res);
     sendResult(res, await opsAutomation.stopCrowd());
+  });
+
+  router.get('/ops/crowd/status', (_req, res) => {
+    if (!opsAutomation) return unavailable(res);
+    sendResult(res, opsAutomation.status());
   });
 
   return router;
