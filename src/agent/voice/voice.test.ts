@@ -74,7 +74,7 @@ describe('voice line', () => {
     expect(body.transcript).toBe('One large coffee with TORONTO5 please.');
     const sent = (calls[0]!.init.body as FormData).get('file') as File;
     expect([sent.name, sent.type]).toEqual(['voice.webm', 'audio/webm']);   // codecs parameter dropped
-    expect(chats).toEqual([{ shopperId: 'shopper-1', storeId: 'scarborough', text: 'One large coffee with TORONTO5 please.' }]);
+    expect(chats).toEqual([{ shopperId: 'shopper-1', storeId: 'scarborough', text: 'One large coffee with TORONTO5 please.', via: 'voice' }]);
     expect(body.reply.actions).toEqual([{ kind: 'order', orderNumber: 'S-1001', totalCents: 309 }]);
     expect(Buffer.from(body.audio, 'base64')).toEqual(Buffer.from([0x49, 0x44, 0x33, 1, 2, 3]));
     expect(body.audioType).toBe('audio/mpeg');
