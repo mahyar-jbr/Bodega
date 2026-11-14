@@ -41,6 +41,7 @@ export interface ScreenSnapshot {
     scams: [number, number] | null; honest: [number, number] | null;
     learningPaused: boolean;
   };
+  versions: { v: number; label: string; scamsPct: number; honestAwayPct: number; rejected: boolean }[];
   results: null | {
     before: { version: number; scamsPct: number; honestAway: number };
     after: { version: number; scamsPct: number; honestAway: number };
@@ -156,6 +157,20 @@ export async function screenSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot
     };
   }
 
+  // ── Every version on the held-out set, for the chart: v0's worse baseline, then each tested candidate ──
+  const versions: ScreenSnapshot['versions'] = [];
+  if (baselines.length) {
+    const b = baselines.reduce((a, c) => (c.summary!.honest.turnedAway > a.summary!.honest.turnedAway ? c : a)).summary!;
+    versions.push({ v: 0, label: 'v0', scamsPct: b.scams.successPct, honestAwayPct: b.honest.turnedAwayPct, rejected: false });
+  }
+  for (const g of [...guardrails].reverse()) {
+    const e = recentEvals.find((x) => x.version === g._id && x.status === 'done' && x.summary);
+    if (!e?.summary || g.status === 'candidate') continue;
+    const rejected = g.status === 'rejected';
+    versions.push({ v: g._id, label: rejected ? `v${g._id} draft` : `v${g._id}`, scamsPct: e.summary.scams.successPct,
+      honestAwayPct: e.summary.honest.turnedAwayPct, rejected });
+  }
+
   // ── Tiles ──
   const runtime = deps.stores();
   const tiles: ScreenSnapshot['tiles'] = STORES.map((store) => {
@@ -216,5 +231,5 @@ export async function screenSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot
     : state?.change === 'promote' && sinceChange < 30_000 ? 'immunity'
     : activeVersion > 0 ? 'round2' : 'round1';
 
-  return { scene, activeVersion, epoch, tiles, feed, cons: conRows, learning, rollout, results };
+  return { scene, activeVersion, epoch, tiles, feed, cons: conRows, learning, rollout, versions, results };
 }

@@ -42,6 +42,12 @@ export const MOCK: ScreenData = {
     stores: [{ store: 'queen', ms: 412 }, { store: 'yonge', ms: 760 }, { store: 'scarborough', ms: 1_580 }],
     scams: [57, 60], honest: [60, 60], learningPaused: false,
   },
+  versions: [
+    { v: 0, label: 'v0', scamsPct: 60, honestAwayPct: 3.3, rejected: false },
+    { v: 1, label: 'v1 draft', scamsPct: 8.3, honestAwayPct: 35, rejected: true },
+    { v: 2, label: 'v2', scamsPct: 6.7, honestAwayPct: 1.7, rejected: false },
+    { v: 3, label: 'v3', scamsPct: 3.3, honestAwayPct: 1.7, rejected: false },
+  ],
   results: {
     before: { version: 0, scamsPct: 60, honestAway: 2 },
     after: { version: 1, scamsPct: 3.3, honestAway: 1 },

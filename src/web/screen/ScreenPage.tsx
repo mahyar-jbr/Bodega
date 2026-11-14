@@ -4,7 +4,7 @@ import './screen.css';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useScreenData } from './live';
-import { LearningPanel, MemoryPanel, ResultsRow, RolloutPanel } from './panels';
+import { LearningPanel, MemoryPanel, ResultsRow, RolloutPanel, VersionChart } from './panels';
 import { ConWall, LiveFeed, StageFrame, StageHeader, StoreTile } from './parts';
 import { SCENES, type Scene, type ScreenData } from './types';
 
@@ -61,7 +61,7 @@ function MainPanel({ scene, data }: { scene: Scene; data: ScreenData }) {
     return (
       <div className="bs-stack" key="round2">
         <ResultsRow data={data.results} />
-        <ConWall cons={data.cons} max={2} />
+        {data.versions.length >= 2 ? <VersionChart versions={data.versions} /> : <ConWall cons={data.cons} max={2} />}
       </div>
     );
   }

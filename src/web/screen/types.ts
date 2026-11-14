@@ -95,6 +95,8 @@ export interface ResultsData {
   immunityMs: number | null;
 }
 
+export interface VersionPoint { v: number; label: string; scamsPct: number; honestAwayPct: number; rejected: boolean }
+
 export interface ScreenData {
   scene: Scene;
   tiles: TileData[];
@@ -103,4 +105,5 @@ export interface ScreenData {
   learning: LearningData | null;
   rollout: RolloutData | null;
   results: ResultsData | null;
+  versions: VersionPoint[];
 }

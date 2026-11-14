@@ -1,7 +1,7 @@
 // The big screen's scene panels: learning (M4-01), immunity and forget, and the results (M4-03).
 import { AwningMark } from './parts';
 import { money, seconds } from './format';
-import { storeName, type ConRow, type LearningData, type ResultsData, type RolloutData, type TestProgress } from './types';
+import { storeName, type ConRow, type LearningData, type VersionPoint, type ResultsData, type RolloutData, type TestProgress } from './types';
 
 // ── Learning ──────────────────────────────────────────────────────────────────────────────
 
@@ -199,6 +199,57 @@ export function MemoryPanel({ cons, max = 3 }: { cons: ConRow[]; max?: number })
           ))}
         </tbody>
       </table>
+    </section>
+  );
+}
+
+// ── Every guardrail version on the same held-out cases (M4-08) ─────────────────────────────
+
+export function VersionChart({ versions }: { versions: VersionPoint[] }) {
+  const W = 1100, H = 190, padL = 70, padR = 70, padT = 16, padB = 40;
+  const top = Math.max(40, Math.ceil(Math.max(...versions.map((v) => Math.max(v.scamsPct, v.honestAwayPct)), 0) / 20) * 20);
+  const x = (i: number) => padL + (versions.length <= 1 ? 0 : (i * (W - padL - padR)) / (versions.length - 1));
+  const y = (p: number) => padT + (1 - p / top) * (H - padT - padB);
+  const kept = versions.map((v, i) => ({ ...v, i })).filter((v) => !v.rejected);
+  const line = (key: 'scamsPct' | 'honestAwayPct') => kept.map((v) => `${x(v.i)},${y(v[key])}`).join(' ');
+  const last = kept.at(-1);
+  return (
+    <section className="bs-glass bs-panel bs-scene" aria-label="Every guardrail version">
+      <div className="bs-panel-head">
+        <h2 className="stage-heading">Every guardrail version</h2>
+        <span className="stage-label bs-legend">
+          <span><i className="bs-key" style={{ background: 'var(--loss)' }} /> Scams that work</span>
+          <span><i className="bs-key bs-key-dot" /> Honest turned away</span>
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} className="bs-chart" role="img"
+        aria-label={versions.map((v) => `${v.label}: ${v.scamsPct}% scams, ${v.honestAwayPct}% honest turned away`).join('; ')}>
+        {[0, top / 2, top].map((p) => (
+          <g key={p}>
+            <line x1={padL} x2={W - padR} y1={y(p)} y2={y(p)} stroke="var(--line)" />
+            <text x={padL - 14} y={y(p) + 9} textAnchor="end" className="bs-chart-t">{p}%</text>
+          </g>
+        ))}
+        <polyline points={line('honestAwayPct')} fill="none" stroke="var(--served)" strokeWidth={3} strokeDasharray="2 9" strokeLinecap="round" />
+        <polyline points={line('scamsPct')} fill="none" stroke="var(--loss)" strokeWidth={3} />
+        {kept.map((v) => <circle key={`s${v.v}`} cx={x(v.i)} cy={y(v.scamsPct)} r={6} fill="var(--loss)" />)}
+        {versions.map((v, i) => v.rejected && (
+          <g key={`r${v.v}`}>
+            <line x1={x(i)} x2={x(i)} y1={y(Math.max(v.scamsPct, v.honestAwayPct))} y2={H - padB} stroke="var(--ink-faint)" strokeDasharray="3 5" />
+            <circle cx={x(i)} cy={y(Math.max(v.scamsPct, v.honestAwayPct))} r={10} fill="none" stroke="var(--ink-3)" strokeWidth={2} />
+            <path d={`M${x(i) - 6} ${y(Math.max(v.scamsPct, v.honestAwayPct)) - 6}l12 12M${x(i) + 6} ${y(Math.max(v.scamsPct, v.honestAwayPct)) - 6}l-12 12`} stroke="var(--ink-3)" strokeWidth={2} />
+          </g>
+        ))}
+        {versions.map((v, i) => (
+          <text key={`l${v.v}`} x={x(i)} y={H - 6} textAnchor="middle" className="bs-chart-t" textDecoration={v.rejected ? 'line-through' : undefined}>{v.label}</text>
+        ))}
+        {last && (
+          <>
+            <text x={x(last.i) + 16} y={y(last.scamsPct) - 10} className="bs-chart-t" fill="var(--loss)">{fmtPct(last.scamsPct)}</text>
+            <text x={x(last.i) + 16} y={y(last.honestAwayPct) + 30} className="bs-chart-t" fill="var(--served)">{fmtPct(last.honestAwayPct)}</text>
+          </>
+        )}
+      </svg>
     </section>
   );
 }

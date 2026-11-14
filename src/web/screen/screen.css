@@ -236,3 +236,9 @@
 .bs-root:focus { outline: none; }
 .bs-pin { position: absolute; left: 40px; bottom: 4px; color: var(--ink-3); font-size: 26px; pointer-events: none; }
 .bs-pin-right { left: auto; right: 40px; }
+.bs-legend { display: flex; gap: 28px; color: var(--ink-2); }
+.bs-legend > span { display: inline-flex; align-items: center; gap: 10px; }
+.bs-key { display: inline-block; width: 28px; height: 3px; border-radius: 2px; }
+.bs-key-dot { background: radial-gradient(circle, var(--served) 1.5px, transparent 2px) 0 0 / 9px 3px repeat-x; }
+.bs-chart { overflow: visible; }
+.bs-chart-t { font: 450 26px var(--font-sans); fill: var(--ink-3); font-variant-numeric: tabular-nums; }
