@@ -151,6 +151,7 @@ Then open `/s/queen` (or `/s/yonge`, `/s/scarborough`) for a store, `/screen` fo
 | `npm run eval -- --set dev` | Scores a guardrail version (`--version N`, default 0) on the dev set; `--case S-201` or `--limit 10` for a few cases, `--record baseline` to keep the result in Atlas |
 | `npm run eval -- --set heldout --record baseline` | Scores the sealed held-out set (aggregates only, about $3 of model calls) |
 | `npm run compare -- 0 [n]` | Prints v0 against v[n] from their recorded held-out runs, overall and per category, with both settings hashes |
+| `npm run compare -- 0 [n] --archive` | The same for a version set aside by `npm run fresh-show` (the newest show, or `--epoch N` for one show); v0's baselines stay live |
 | `npm run try` | Replays dev cases through the shopkeeper with their transcripts, and lists the dev scams that con v0 every time (`--case S-203`, `--kind scam`, `--runs 2`) |
 
 `GET /api/health` answers 200 when Atlas answers a ping, and 503 with the reason otherwise. Without `ANTHROPIC_API_KEY` the app runs a keyless stand-in shopkeeper (and evaluations refuse to run); without the Agent Memory credentials, the con memory groups cons by violation.
