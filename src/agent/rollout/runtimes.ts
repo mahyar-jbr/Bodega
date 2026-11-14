@@ -65,9 +65,14 @@ export function createStoreRuntimes({ db, bus, pollMs = 3_000 }: StoreRuntimesOp
       await db.collection<StoreRuntimeDoc>(STORE_RUNTIME).updateOne({ _id: storeId },
         { $set: { appliedVersion: version.version, appliedAt, online: r.online } }, { upsert: true });
       // Changes made while this process runs get a rollout record; at boot a store just loads the active version.
+      // One row per store and change: with several processes alive (an old instance draining during a
+      // deploy), the first one to apply it records the time; the others leave it alone.
       if (change >= startedAt) {
-        await db.collection<RolloutDoc>(ROLLOUTS).insertOne({ version: version.version, storeId, change: doc.change,
-          changedAt: doc.changedAt, appliedAt, ms: appliedAt.getTime() - change, via });
+        await db.collection<RolloutDoc>(ROLLOUTS).updateOne(
+          { storeId, version: version.version, change: doc.change, changedAt: doc.changedAt },
+          { $setOnInsert: { appliedAt, ms: appliedAt.getTime() - change, via } },
+          { upsert: true },
+        ).catch((e) => { if ((e as { code?: number }).code !== 11000) throw e; });
       }
     }).catch((error) => console.error(`${storeId}: applying version ${doc.activeVersion} failed:`, error));
     return r.queue;

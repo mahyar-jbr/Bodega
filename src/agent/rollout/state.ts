@@ -25,8 +25,9 @@ export interface AgentStateDoc {
   /** Versions active before the current one, oldest first: a rollback returns to the last. */
   stack: number[];
   learning: boolean;
-  /** When the learning lock was taken (a lock older than the learner's lease is stale). */
+  /** The learning lock's heartbeat and owner: a lock whose heartbeat is older than the learner's lease is stale. */
   learningLockedAt?: Date;
+  learningOwner?: string;
   learningPaused: boolean;
   /** The con-memory epoch: a reset starts a new one. */
   epoch: number;
@@ -62,6 +63,29 @@ export async function ensureAgentState(db: Db): Promise<void> {
     { upsert: true },
   );
   await db.collection(ROLLOUTS).createIndex({ changedAt: -1, storeId: 1 });
+  await ensureUniqueRollouts(db);
+}
+
+const ROLLOUT_KEY = { storeId: 1, version: 1, change: 1, changedAt: 1 } as const;
+
+/** One rollouts row per (storeId, version, change, changedAt), enforced by a unique index. Rows a
+ *  second process wrote before the index existed are removed first (the earliest is kept). */
+async function ensureUniqueRollouts(db: Db): Promise<void> {
+  const coll = db.collection(ROLLOUTS);
+  try {
+    await coll.createIndex(ROLLOUT_KEY, { unique: true, name: 'one_row_per_store_and_change' });
+  } catch (error) {
+    if ((error as { code?: number }).code !== 11000) throw error;
+    const dupes = await coll.aggregate<{ ids: unknown[] }>([
+      { $sort: { appliedAt: 1 } },
+      { $group: { _id: { storeId: '$storeId', version: '$version', change: '$change', changedAt: '$changedAt' }, ids: { $push: '$_id' }, n: { $sum: 1 } } },
+      { $match: { n: { $gt: 1 } } },
+    ]).toArray();
+    const extra = dupes.flatMap((d) => d.ids.slice(1));
+    if (extra.length) await coll.deleteMany({ _id: { $in: extra as never[] } });
+    console.log(`rollouts: removed ${extra.length} duplicate rows`);
+    await coll.createIndex(ROLLOUT_KEY, { unique: true, name: 'one_row_per_store_and_change' });
+  }
 }
 
 export async function readAgentState(db: Db, session?: ClientSession): Promise<AgentStateDoc> {

@@ -55,8 +55,9 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
     return run;
   }
 
-  const api: AgentApi = {
-    async start() {
+  let starting: Promise<void> | null = null;
+
+  async function startOnce(): Promise<void> {
       await ensureMemoryRules(deps.db);
       runtimes ??= createStoreRuntimes({ db: deps.db, bus: deps.bus });
       await runtimes.start();
@@ -69,6 +70,14 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
       auditor ??= createAuditor({ db: deps.db, store, bus: deps.bus,
         onIncident: (incident) => { memory.assign(incident).catch((e) => console.error('con memory: assign failed:', e)); } });
       await auditor.start();
+  }
+
+  const api: AgentApi = {
+    /** Starts once per process, however often it's called: one set of store runtimes, one auditor,
+     *  one con memory and one learner. */
+    async start() {
+      starting ??= startOnce().catch((error) => { starting = null; throw error; });
+      return starting;
     },
 
     async handleMessage({ shopperId, storeId, text }) {

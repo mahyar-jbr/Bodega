@@ -41,8 +41,11 @@ export interface LearningRunDoc {
 
 export const LEARNING_RUNS = 'learning_runs';
 export const LEARN_DELAY_MS = 10_000;
-/** A learning lock older than this is stale (a cycle takes about a minute; a restart can leave it set). */
-export const LOCK_LEASE_MS = 3 * 60_000;
+/** The learning lock carries an owner and a heartbeat every 10 s; one without a heartbeat for 30 s is
+ *  stale (its process restarted or was replaced by a deploy), and another cycle may take it. */
+export const LOCK_LEASE_MS = 30_000;
+const LOCK_HEARTBEAT_MS = 10_000;
+const OWNER = `${process.env.RENDER_INSTANCE_ID ?? 'local'}:${process.pid}:${new ObjectId().toHexString().slice(-6)}`;
 /** A con whose cycle failed with an error (not a rejection) is tried automatically once more. */
 const MAX_ERROR_TRIES = 2;
 
@@ -161,13 +164,18 @@ export function createLearner({ db, store, conMemory, gate, delayMs = LEARN_DELA
     let locked = false;
     let run: LearningRunDoc | null = null;
     let cons: ConDoc[] = [];
+    let heartbeat: NodeJS.Timeout | undefined;
     try {
       const now = new Date();
       const lock = await state.updateOne(
         { _id: 'agent', $or: [{ learning: false }, { learningLockedAt: { $lt: new Date(now.getTime() - LOCK_LEASE_MS) } }, { learningLockedAt: { $exists: false } }] },
-        { $set: { learning: true, learningLockedAt: now } });
+        { $set: { learning: true, learningLockedAt: now, learningOwner: OWNER } });
       if (lock.modifiedCount === 0) return;           // another cycle (or process) holds the lock
       locked = true;
+      heartbeat = setInterval(() => {
+        void state.updateOne({ _id: 'agent', learning: true, learningOwner: OWNER }, { $set: { learningLockedAt: new Date() } }).catch(() => {});
+      }, LOCK_HEARTBEAT_MS);
+      heartbeat.unref();
       const st = await readAgentState(db);
       if (trigger === 'auto' && st.learningPaused) return;
       const all = await conMemory.uncovered(st.epoch);
@@ -221,7 +229,8 @@ export function createLearner({ db, store, conMemory, gate, delayMs = LEARN_DELA
       }
       if (run) await runs.updateOne({ _id: run._id }, { $set: { phase: 'failed', finishedAt: new Date(), error: String((error as Error).message ?? error).slice(0, 300) } }).catch(() => {});
     } finally {
-      if (locked) await state.updateOne({ _id: 'agent' }, { $set: { learning: false } }).catch((e) => console.error('learner: unlock failed:', e));
+      if (heartbeat) clearInterval(heartbeat);
+      if (locked) await state.updateOne({ _id: 'agent', learningOwner: OWNER }, { $set: { learning: false } }).catch((e) => console.error('learner: unlock failed:', e));
       running = false;
       // Cons that landed during the cycle start the next one.
       void (async () => {
@@ -232,12 +241,16 @@ export function createLearner({ db, store, conMemory, gate, delayMs = LEARN_DELA
   }
 
   return {
-    /** At startup: a lock or a run left by a restart is cleared, and uncovered cons are picked up. */
+    /** At startup: a stale lock (no heartbeat for 30 s) and its unfinished runs are cleared, and
+     *  uncovered cons are picked up. A live lock held by another process is left alone. */
     async start() {
-      const cleared = await state.updateOne({ _id: 'agent', learning: true }, { $set: { learning: false } });
-      if (cleared.modifiedCount) console.log('learner: cleared a learning lock left by a restart');
-      await runs.updateMany({ finishedAt: null }, { $set: { phase: 'failed', finishedAt: new Date(), error: 'interrupted by a restart' } });
+      const staleBefore = new Date(Date.now() - LOCK_LEASE_MS);
+      const cleared = await state.updateOne(
+        { _id: 'agent', learning: true, $or: [{ learningLockedAt: { $lt: staleBefore } }, { learningLockedAt: { $exists: false } }] },
+        { $set: { learning: false } });
+      if (cleared.modifiedCount) console.log('learner: cleared a stale learning lock');
       const st = await readAgentState(db);
+      if (!st.learning) await runs.updateMany({ finishedAt: null }, { $set: { phase: 'failed', finishedAt: new Date(), error: 'interrupted by a restart' } });
       if (hasLearnerKey() && !st.learningPaused && (await conMemory.uncovered(st.epoch)).length > 0) scheduleSoon();
     },
 
