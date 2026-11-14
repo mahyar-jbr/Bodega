@@ -103,7 +103,7 @@ Frozen at 16:15, submitted by 16:50 (the deadline is 17:00), and rehearsed by 17
 |---|---|---|---|---|---|
 | F02 | Fixes from the run | Only fixes from the recorded run; nothing new after M4 | both | 16:15 | Not started |
 | F03 | Code freeze | No code is pushed after 16:15 (README.md excepted), the last deploy is green, and the show is reset to v0 | both | 16:15 | Not started |
-| F01 | README | It's finished from the draft (the helper's, by 15:30) with the day's numbers | Mahyar | 16:40 | Not started |
+| F01 | README | It's finished from the draft (the helper's, by 15:30) with the day's numbers | Mahyar | 16:40 | In progress |
 | F04 | Launch video | The 1-minute launch video is uploaded and linked on the submission. It's a launch-style piece made by the PM's helper, not a recording of us: motion graphics in Bodega's design system, short captures of the live app (a con at Queen St, the learning panel, every store turning immune, Yonge refusing, the rollback) and the day's real numbers. The recorded run stays as the backup | Mahyar | 16:30 | In progress |
 | F05 | Backup | The recorded run is the backup, re-recorded only if the build changed after the freeze | Kasra | 16:40 | Not started |
 | F06 | Submitted | The repo is checked for personal files and secrets, the `pre-event` tag and the README's "Built at the event" section are in place, and the live link, description, video, problem statement 2 and both of us are on the submission page | Mahyar | 16:50 | Not started |
@@ -117,7 +117,7 @@ Frozen at 16:15, submitted by 16:50 (the deadline is 17:00), and rehearsed by 17
 | X1 | A store goes offline, a new con is learned, and the store catches up live when it's back | both | Not started |
 | X2 | A voice hotline with ElevenLabs (it needs an ElevenLabs key) | Mahyar | Not started |
 | X3 | Atlas agent memory for regular customers | Mahyar | Not started |
-| X4 | An audit-trail panel for one con: its summary, ledger entries, incident and the version that blocks it | Mahyar | In progress |
+| X4 | An audit-trail panel for one con: its summary, ledger entries, incident and the version that blocks it | Mahyar | Done |
 | M4-05 | Flash sale: the limited hoodie is restocked to 10, then 100 bot buyers race for it; exactly 10 sell, and every wallet matches its ledger | Kasra A | Not started |
 | M4-09 | The flash sale's result on the big screen | Mahyar | Not started |
 
