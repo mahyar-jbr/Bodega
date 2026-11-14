@@ -64,7 +64,8 @@ export function createRealAgent(deps: AgentDeps, options: AgentOptions = {}): Ag
       conMemory ??= createConMemory({ db: deps.db, onNewCon: (con) => learner?.onNewCon(con) });
       await conMemory.start();
       const memory = conMemory;
-      learner ??= createLearner({ db: deps.db, conMemory: memory, gate: (n, opts) => gate({ db: deps.db }, n, opts) });
+      learner ??= createLearner({ db: deps.db, store, conMemory: memory, gate: (n, opts) => gate({ db: deps.db }, n, opts) });
+      await learner.start();
       auditor ??= createAuditor({ db: deps.db, store, bus: deps.bus,
         onIncident: (incident) => { memory.assign(incident).catch((e) => console.error('con memory: assign failed:', e)); } });
       await auditor.start();

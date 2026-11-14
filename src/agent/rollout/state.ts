@@ -25,6 +25,8 @@ export interface AgentStateDoc {
   /** Versions active before the current one, oldest first: a rollback returns to the last. */
   stack: number[];
   learning: boolean;
+  /** When the learning lock was taken (a lock older than the learner's lease is stale). */
+  learningLockedAt?: Date;
   learningPaused: boolean;
   /** The con-memory epoch: a reset starts a new one. */
   epoch: number;

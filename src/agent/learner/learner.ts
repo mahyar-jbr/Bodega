@@ -9,6 +9,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { ObjectId, type Db } from 'mongodb';
+import type { LedgerEntry, Order, StoreApi } from '../../shared/contract';
+import { checkMoneyCall } from '../guard/check';
+import { checkoutCallFromOrder } from '../guard/facts';
 import { validateVersion } from '../guard/rules';
 import type { GuardrailVersion, Rule } from '../guard/types';
 import type { ConDoc, ConMemory } from '../memory/con-memory';
@@ -16,7 +19,7 @@ import { AGENT_STATE, loadVersion, readAgentState, saveVersion, type AgentStateD
 import { LEARNER_SYSTEM } from './prompt';
 import { LearnedVersion, shapeProblems, toRules } from './schema';
 
-import type { GateResult } from '../gate/gate';
+import { gateRunning, type GateResult } from '../gate/gate';
 export type { GateResult };
 
 export type GateFn = (version: number, opts: { attempt: 1 | 2 }) => Promise<GateResult>;
@@ -38,9 +41,14 @@ export interface LearningRunDoc {
 
 export const LEARNING_RUNS = 'learning_runs';
 export const LEARN_DELAY_MS = 10_000;
+/** A learning lock older than this is stale (a cycle takes about a minute; a restart can leave it set). */
+export const LOCK_LEASE_MS = 3 * 60_000;
+/** A con whose cycle failed with an error (not a rejection) is tried automatically once more. */
+const MAX_ERROR_TRIES = 2;
 
 export interface LearnerDeps {
   db: Db;
+  store: StoreApi;
   conMemory: ConMemory;
   gate: GateFn;
   delayMs?: number;
@@ -109,12 +117,37 @@ export async function proposeVersion(input: { active: GuardrailVersion; cons: Co
   throw new Error('unreachable');
 }
 
-export function createLearner({ db, conMemory, gate, delayMs = LEARN_DELAY_MS }: LearnerDeps) {
+export function createLearner({ db, store, conMemory, gate, delayMs = LEARN_DELAY_MS }: LearnerDeps) {
   const runs = db.collection<LearningRunDoc>(LEARNING_RUNS);
   const state = db.collection<AgentStateDoc>(AGENT_STATE);
   let timer: NodeJS.Timeout | undefined;
   let running = false;
   const attempted = new Set<string>();    // cons an automatic cycle already tried (no endless re-learning)
+  const errorTries = new Map<string, number>();
+
+  /** Would the active version already stop what this con did? Replays its latest incident's money
+   *  call through the guard. Unknown means no. */
+  async function activeCovers(version: GuardrailVersion, con: ConDoc): Promise<boolean> {
+    if (version.rules.length === 0) return false;
+    const incident = await db.collection<{ conId: string; ledgerId: string; at: Date }>('incidents').find({ conId: con._id }).sort({ at: -1 }).limit(1).next();
+    const entry = incident ? await db.collection<LedgerEntry>('ledger').findOne({ id: incident.ledgerId }) : null;
+    if (!entry) return false;
+    const ctx = { store, storeId: entry.storeId, shopperId: entry.shopperId, conversationId: entry.conversationId ?? 'coverage-check' };
+    const base = { storeId: entry.storeId, shopperId: entry.shopperId, idempotencyKey: 'coverage-check', ...(entry.conversationId ? { conversationId: entry.conversationId } : {}) };
+    if (entry.kind === 'sale') {
+      const order = entry.orderId ? await db.collection<Order>('orders').findOne({ id: entry.orderId }) : null;
+      if (!order) return false;
+      const call = checkoutCallFromOrder(order);
+      const d = await checkMoneyCall(version, { tool: 'checkout', request: { ...base, items: call.items, ...(call.discount ? { discount: call.discount } : {}) } }, ctx);
+      return d.action !== 'pass';
+    }
+    if (entry.kind === 'refund') {
+      const d = await checkMoneyCall(version, { tool: 'refund', request: { ...base, amountCents: entry.walletDeltaCents, reason: entry.reason ?? '',
+        ...(entry.claimedOrderNumber ? { orderNumber: entry.claimedOrderNumber } : {}) } }, ctx);
+      return d.action !== 'pass';
+    }
+    return false;
+  }
 
   function scheduleSoon() {
     if (timer || running) return;
@@ -127,21 +160,36 @@ export function createLearner({ db, conMemory, gate, delayMs = LEARN_DELAY_MS }:
     running = true;
     let locked = false;
     let run: LearningRunDoc | null = null;
+    let cons: ConDoc[] = [];
     try {
-      const lock = await state.updateOne({ _id: 'agent', learning: false }, { $set: { learning: true } });
+      const now = new Date();
+      const lock = await state.updateOne(
+        { _id: 'agent', $or: [{ learning: false }, { learningLockedAt: { $lt: new Date(now.getTime() - LOCK_LEASE_MS) } }, { learningLockedAt: { $exists: false } }] },
+        { $set: { learning: true, learningLockedAt: now } });
       if (lock.modifiedCount === 0) return;           // another cycle (or process) holds the lock
       locked = true;
       const st = await readAgentState(db);
       if (trigger === 'auto' && st.learningPaused) return;
       const all = await conMemory.uncovered(st.epoch);
-      const cons = trigger === 'auto' ? all.filter((c) => !attempted.has(c._id)) : all;
+      const fresh = trigger === 'auto' ? all.filter((c) => !attempted.has(c._id)) : all;
+      if (fresh.length === 0) return;
+      fresh.forEach((c) => attempted.add(c._id));
+      const active = (await loadVersion(db, st.activeVersion)) ?? { version: st.activeVersion, rules: [] };
+      // A con that arrived while a version was being learned or gated may already be stopped by it:
+      // then it's covered, and nothing needs learning (no second gate run on stage).
+      for (const c of fresh) {
+        if (await activeCovers(active, c).catch(() => false)) {
+          await db.collection<ConDoc>('cons').updateOne({ _id: c._id, coveredBy: null }, { $set: { coveredBy: active.version } });
+          console.log(`learner: v${active.version} already covers ${c._id}`);
+        } else {
+          cons.push(c);
+        }
+      }
       if (cons.length === 0) return;
-      cons.forEach((c) => attempted.add(c._id));
 
       run = { _id: new ObjectId(), epoch: st.epoch, trigger, cons: cons.map((c) => c._id), phase: 'learning', attempts: [],
         startedAt: new Date(), finishedAt: null, error: null };
       await runs.insertOne(run);
-      const active = (await loadVersion(db, st.activeVersion)) ?? { version: st.activeVersion, rules: [] };
       const knownCons = new Set([...cons.map((c) => c._id), ...active.rules.flatMap((r) => r.cons)]);
       let feedback: string | null = null;
 
@@ -151,6 +199,8 @@ export function createLearner({ db, conMemory, gate, delayMs = LEARN_DELAY_MS }:
         const entry = { attempt, version: saved.version, title: saved.title, rules: saved.rules.map((r) => r.title),
           verdict: null, reasons: [], evaluationId: null, learnMs: proposal.learnMs };
         await runs.updateOne({ _id: run._id }, { $set: { phase: 'gating' }, $push: { attempts: entry } });
+        // One gate at a time (the gate demo may be running): wait for it rather than fail.
+        for (let i = 0; i < 90 && gateRunning() !== null; i++) await new Promise((r) => setTimeout(r, 1_000));
         const result = await gate(saved.version, { attempt });
         await runs.updateOne({ _id: run._id, 'attempts.version': saved.version },
           { $set: { 'attempts.$.verdict': result.verdict, 'attempts.$.reasons': result.reasons, 'attempts.$.evaluationId': result.evaluationId } });
@@ -163,6 +213,12 @@ export function createLearner({ db, conMemory, gate, delayMs = LEARN_DELAY_MS }:
       await runs.updateOne({ _id: run._id }, { $set: { phase: 'rejected', finishedAt: new Date() } });
     } catch (error) {
       console.error('learner:', error);
+      // An error (an overloaded API, a busy gate), not a verdict: these cons may be tried once more.
+      for (const c of cons) {
+        const tries = (errorTries.get(c._id) ?? 0) + 1;
+        errorTries.set(c._id, tries);
+        if (tries < MAX_ERROR_TRIES) attempted.delete(c._id);
+      }
       if (run) await runs.updateOne({ _id: run._id }, { $set: { phase: 'failed', finishedAt: new Date(), error: String((error as Error).message ?? error).slice(0, 300) } }).catch(() => {});
     } finally {
       if (locked) await state.updateOne({ _id: 'agent' }, { $set: { learning: false } }).catch((e) => console.error('learner: unlock failed:', e));
@@ -176,6 +232,15 @@ export function createLearner({ db, conMemory, gate, delayMs = LEARN_DELAY_MS }:
   }
 
   return {
+    /** At startup: a lock or a run left by a restart is cleared, and uncovered cons are picked up. */
+    async start() {
+      const cleared = await state.updateOne({ _id: 'agent', learning: true }, { $set: { learning: false } });
+      if (cleared.modifiedCount) console.log('learner: cleared a learning lock left by a restart');
+      await runs.updateMany({ finishedAt: null }, { $set: { phase: 'failed', finishedAt: new Date(), error: 'interrupted by a restart' } });
+      const st = await readAgentState(db);
+      if (hasLearnerKey() && !st.learningPaused && (await conMemory.uncovered(st.epoch)).length > 0) scheduleSoon();
+    },
+
     /** The con memory calls this for every new con. */
     onNewCon(con: ConDoc) {
       if (con.coveredBy !== null || !hasLearnerKey()) return;
@@ -186,7 +251,8 @@ export function createLearner({ db, conMemory, gate, delayMs = LEARN_DELAY_MS }:
     async learnNow(): Promise<{ started: boolean; reason?: string }> {
       if (!hasLearnerKey()) return { started: false, reason: 'Learning needs ANTHROPIC_API_KEY.' };
       const st = await readAgentState(db);
-      if (running || st.learning) return { started: false, reason: 'Already learning.' };
+      const lockFresh = st.learning && st.learningLockedAt !== undefined && Date.now() - new Date(st.learningLockedAt).getTime() < LOCK_LEASE_MS;
+      if (running || lockFresh) return { started: false, reason: 'Already learning.' };
       await state.updateOne({ _id: 'agent' }, { $set: { learningPaused: false } });
       if ((await conMemory.uncovered(st.epoch)).length === 0) return { started: false, reason: 'No new cons to learn from.' };
       if (timer) { clearTimeout(timer); timer = undefined; }
@@ -198,6 +264,7 @@ export function createLearner({ db, conMemory, gate, delayMs = LEARN_DELAY_MS }:
     reset() {
       if (timer) { clearTimeout(timer); timer = undefined; }
       attempted.clear();
+      errorTries.clear();
     },
 
     isRunning: () => running,
