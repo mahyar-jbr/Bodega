@@ -1,7 +1,7 @@
 // The big screen's scene panels: learning (M4-01), immunity and forget, and the results (M4-03).
 import { AwningMark } from './parts';
 import { money, seconds } from './format';
-import { storeName, type LearningData, type ResultsData, type RolloutData, type TestProgress } from './types';
+import { storeName, type ConRow, type LearningData, type ResultsData, type RolloutData, type TestProgress } from './types';
 
 // ── Learning ──────────────────────────────────────────────────────────────────────────────
 
@@ -162,4 +162,43 @@ export function ResultsRow({ data }: { data: ResultsData }) {
 
 function fmtPct(p: number) {
   return `${Number.isInteger(p) ? p : p.toFixed(1)}%`;
+}
+
+// ── Memory you can govern (M4-07) ────────────────────────────────────────────────────────────
+
+const MEMORY_RULES: [title: string, body: string][] = [
+  ['Raw chats stay put', 'Only their own shopkeeper reads them. Gone 24 hours after the last message.'],
+  ['Only proven rules travel', 'Shared with every store only after winning on 120 unseen cases.'],
+  ['Any rule can be taken back', 'Roll back, and every store forgets it in seconds.'],
+];
+
+export function MemoryPanel({ cons, max = 3 }: { cons: ConRow[]; max?: number }) {
+  return (
+    <section className="bs-glass bs-panel bs-scene" aria-label="Memory">
+      <div className="bs-panel-head">
+        <h2 className="stage-heading">What Bodega remembers</h2>
+        <span className="stage-label bs-quiet">{cons.length} {cons.length === 1 ? 'con' : 'cons'}, summaries only</span>
+      </div>
+      <div className="bs-mem-rules">
+        {MEMORY_RULES.map(([t, b]) => (
+          <div key={t} className="bs-mem-rule">
+            <div className="stage-body bs-ink">{t}</div>
+            <div className="stage-label bs-quiet">{b}</div>
+          </div>
+        ))}
+      </div>
+      <table className="bs-table stage-body" style={{ marginTop: 18 }}>
+        <thead className="stage-label"><tr><th>Con</th><th>First seen</th><th className="bs-num-col" style={{ width: 230 }}>Blocked by</th></tr></thead>
+        <tbody>
+          {cons.slice(0, max).map((c) => (
+            <tr key={c.id}>
+              <td>{c.summary}</td>
+              <td><span className="bs-store-chip"><AwningMark store={c.firstSeen} width={30} />{storeName(c.firstSeen)}</span></td>
+              <td className={`bs-num-col ${c.coveredBy != null ? 'bs-good' : 'bs-quiet'}`}>{c.coveredBy != null ? `Policy v${c.coveredBy}` : 'Not yet'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
 }

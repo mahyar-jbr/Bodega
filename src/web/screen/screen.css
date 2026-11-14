@@ -231,3 +231,5 @@
 .bs-results { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-6); }
 .bs-results .bs-panel { gap: 12px; }
 .bs-stack { display: grid; grid-template-rows: auto 1fr; gap: var(--space-6); min-height: 0; }
+.bs-mem-rules { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-8); }
+.bs-mem-rule { border-top: 2px solid var(--immune); padding-top: 14px; display: grid; gap: 6px; }

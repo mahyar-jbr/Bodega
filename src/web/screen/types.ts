@@ -53,6 +53,7 @@ export interface ConRow {
   firstSeen: StoreKey;
   worked: number;
   blocked: number;
+  coveredBy: number | null;              // the guardrail version that blocks it, if any
 }
 
 // The learning loop for the newest candidate version.

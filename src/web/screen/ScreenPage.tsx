@@ -3,8 +3,8 @@ import '../../../design/tokens.css';
 import './screen.css';
 import { useSearchParams } from 'react-router';
 import { MOCK } from './mock';
-import { LearningPanel, ResultsRow, RolloutPanel } from './panels';
-import { ConWall, LiveFeed, ScenePlaceholder, StageFrame, StageHeader, StoreTile } from './parts';
+import { LearningPanel, MemoryPanel, ResultsRow, RolloutPanel } from './panels';
+import { ConWall, LiveFeed, StageFrame, StageHeader, StoreTile } from './parts';
 import { SCENES, type Scene, type ScreenData } from './types';
 
 // Sample data until /api/agent/state and the screen SSE topic land (M2-04).
@@ -47,6 +47,6 @@ function MainPanel({ scene, data }: { scene: Scene; data: ScreenData }) {
       </div>
     );
   }
-  if (scene === 'memory') return <ScenePlaceholder key="memory" title="What Bodega remembers" />;
+  if (scene === 'memory') return <MemoryPanel key="memory" cons={data.cons} />;
   return <ConWall key="round1" cons={data.cons} />;
 }
