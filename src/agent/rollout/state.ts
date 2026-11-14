@@ -48,7 +48,6 @@ export interface GuardrailDoc extends GuardrailVersion {
   parentVersion: number | null;    // the version it was learned from
 }
 
-const versionCache = new Map<string, GuardrailVersion>();   // `${db}:${n}`, versions are immutable
 
 export async function ensureAgentState(db: Db): Promise<void> {
   const now = new Date();
@@ -94,16 +93,12 @@ export async function readAgentState(db: Db, session?: ClientSession): Promise<A
   return doc;
 }
 
+/** Read from Atlas every time (no cache): a version is loaded only when the active version changes,
+ *  and version numbers start again at v1 after `npm run fresh-show` archives a show. */
 export async function loadVersion(db: Db, n: number): Promise<GuardrailVersion | null> {
   if (n === 0) return V0;
-  const key = `${db.databaseName}:${n}`;
-  const cached = versionCache.get(key);
-  if (cached) return cached;
   const doc = await db.collection<GuardrailDoc>(GUARDRAILS).findOne({ _id: n }, { projection: { version: 1, rules: 1 } });
-  if (!doc) return null;
-  const version: GuardrailVersion = { version: doc.version, rules: doc.rules };
-  versionCache.set(key, version);
-  return version;
+  return doc ? { version: doc.version, rules: doc.rules } : null;
 }
 
 export async function nextVersionNumber(db: Db): Promise<number> {
