@@ -1,11 +1,15 @@
-// The agent side's entry point (ARCHITECTURE Appendix A): createAgent(deps): AgentApi.
-// Until M1-03 it is the stand-in agent: chat that really calls checkout, no model, no learning.
+// The agent side's entry point (ARCHITECTURE Appendix A): createAgent({ store, db, bus }): AgentApi,
+// then await agent.start(). Without ANTHROPIC_API_KEY the shopkeeper is the keyless stub.
 import type { AgentApi, AgentDeps } from '../shared/contract';
-import { createStandInAgent } from './stand-in';
+import { createRealAgent, type AgentOptions } from './agent';
 
-export function createAgent(deps: AgentDeps): AgentApi {
-  return createStandInAgent(deps);
+export function createAgent(deps: AgentDeps, options?: AgentOptions): AgentApi {
+  return createRealAgent(deps, options);
 }
+
+export { LIMITS } from './agent';
+export type { AgentOptions } from './agent';
+export { atlasConversations, memoryConversations, conversationIdFor } from './conversations';
 
 export { hasModelKey, runShopkeeper } from './shopkeeper/run';
 export { SETTINGS_HASH, settingsHash, SHOPKEEPER_SETTINGS } from './shopkeeper/settings';
