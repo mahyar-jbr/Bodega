@@ -1,8 +1,8 @@
 // The presenter's controls on /stage: a tiny corner button (or the key `o`) opens a strip with the four
 // demo actions. It calls the same POST /api/ops/* routes as the ops console with the x-ops-password header.
-// The server still checks the password on every call (the public URL must not reset or roll back).
-// On the demo laptop it's asked for once: after the first successful action it's remembered in
-// localStorage (bodega:ops-key), cleared on a 401 or by "Forget this laptop". Never in the URL or a log.
+// With OPS_OPEN on the server the actions need no password, so the strip asks for none. Only if the
+// server answers 401 does it ask once, retry the action, and remember the password on this laptop
+// (localStorage bodega:ops-key) once it works; a later 401 clears it. Never in the URL or a log.
 // Clicks never move the keyboard focus (a shop window keeps its typing), and typing in the password field
 // never reaches the scene keys.
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -33,6 +33,8 @@ export function StageOps() {
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState(readPassword);
   const [draft, setDraft] = useState('');
+  const [asking, setAsking] = useState(false);          // the server wants a password
+  const pending = useRef<Action | null>(null);          // the action to retry once it's given
   const [busy, setBusy] = useState<string | null>(null);
   const [armed, setArmed] = useState<string | null>(null);
   const [toast, setToast] = useState<{ text: string; bad?: boolean; id: number } | null>(null);
@@ -54,9 +56,9 @@ export function StageOps() {
     toastTimer.current = window.setTimeout(() => setToast(null), 4_500);
   };
 
-  const run = async (a: Action) => {
+  const run = async (a: Action, pw = password, confirmed = false) => {
     if (busy) return;
-    if (a.confirm && armed !== a.key) {
+    if (a.confirm && !confirmed && armed !== a.key) {
       setArmed(a.key);
       window.clearTimeout(armTimer.current);
       armTimer.current = window.setTimeout(() => setArmed(null), 3_000);
@@ -66,12 +68,16 @@ export function StageOps() {
     setBusy(a.key);
     try {
       const r = await apiJson<Record<string, unknown>>(a.path, {
-        method: 'POST', headers: { 'x-ops-password': password }, body: JSON.stringify(a.body ?? {}),
+        method: 'POST', headers: pw ? { 'x-ops-password': pw } : {}, body: JSON.stringify(a.body ?? {}),
       });
-      savePassword(password);          // it worked: this laptop won't ask again
+      if (pw) savePassword(pw);        // it worked: this laptop won't ask again
       say(a.done(r ?? {}));
     } catch (e) {
-      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) { savePassword(''); setPassword(''); say('Password rejected', true); }
+      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+        savePassword(''); setPassword('');
+        pending.current = a; setAsking(true);
+        say(pw ? 'Password rejected' : 'This server wants the ops password', true);
+      }
       else say(`${a.label} failed: ${e instanceof Error ? e.message : 'error'}`, true);
     } finally { setBusy(null); }
   };
@@ -79,8 +85,11 @@ export function StageOps() {
   const unlock = (e: FormEvent) => {
     e.preventDefault();
     if (!draft) return;
-    setPassword(draft); setDraft('');   // remembered only after the first action succeeds
+    const pw = draft;
+    setPassword(pw); setDraft(''); setAsking(false);   // remembered only once an action succeeds with it
     (document.activeElement as HTMLElement | null)?.blur();
+    const a = pending.current; pending.current = null;
+    if (a) void run(a, pw, true);                        // retry what was asked for (already confirmed)
   };
 
   const forget = () => { savePassword(''); setPassword(''); setArmed(null); say('Forgotten on this laptop'); };
@@ -96,12 +105,12 @@ export function StageOps() {
       </button>
       {open && (
         <div className="so-strip bs-glass" role="toolbar" aria-label="Demo controls">
-          {password ? ACTIONS.map((a) => (
+          {!asking ? ACTIONS.map((a) => (
             <button key={a.key} type="button" className="so-btn" onMouseDown={keepFocus} onClick={() => void run(a)}
               disabled={!!busy} data-armed={armed === a.key ? 'true' : undefined} data-busy={busy === a.key ? 'true' : undefined}>
               {armed === a.key ? a.confirm : busy === a.key ? `${a.label}…` : a.label}
             </button>
-          )).concat(<button key="forget" type="button" className="so-forget" onMouseDown={keepFocus} onClick={forget}>Forget this laptop</button>) : (
+          )).concat(password ? [<button key="forget" type="button" className="so-forget" onMouseDown={keepFocus} onClick={forget}>Forget this laptop</button>] : []) : (
             <form className="so-unlock" onSubmit={unlock}>
               <input type="password" className="so-input" placeholder="Ops password" aria-label="Ops password" autoComplete="off"
                 value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus />
