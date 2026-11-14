@@ -146,9 +146,12 @@ async function buildSnapshot(deps: SnapshotDeps): Promise<ScreenSnapshot> {
   const newest = guardrails.find((g) => g.source !== 'v0');
   let learning: ScreenSnapshot['learning'] = null;
   const attempt = run?.attempts.at(-1);
+  // The learner stores the attempt's evaluation id only once the gate returns: until then, the running
+  // evaluation is the newest one for the attempt's version (so the test dots fill live).
   const testEval = attempt?.evaluationId
     ? evaluations.find((e) => e._id.toHexString() === attempt.evaluationId)
       ?? await db.collection<EvaluationDoc>('evaluations').findOne({ _id: new ObjectId(attempt.evaluationId) })
+    : attempt ? evaluations.find((e) => e.version === attempt.version && e.startedAt >= run!.startedAt)
     : !run && newest ? recentEvals.find((e) => e.version === newest._id) : undefined;
   if (run || state?.learning || newest) {
     const phase: NonNullable<ScreenSnapshot['learning']>['phase'] = run

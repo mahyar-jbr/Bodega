@@ -98,6 +98,7 @@ export function RolloutPanel({ data }: { data: RolloutData }) {
   const last = reported.length ? Math.max(...reported.map((s) => s.ms)) : 0;
   const scale = Math.max(last, 1);
   const forgot = data.kind === 'forgot';
+  const tops = timelineTops(data.stores, scale);
   return (
     <section className="bs-glass bs-panel bs-scene bs-rollout" aria-label={forgot ? 'Rolled back' : 'Immunity'}>
       <div>
@@ -125,7 +126,7 @@ export function RolloutPanel({ data }: { data: RolloutData }) {
           <span className="bs-tl-t bd-num bs-quiet">0.0s</span><span className="bs-tl-dot" data-state="origin" /><span className="bs-quiet">{forgot ? 'Roll back' : 'Verdict'}</span>
         </div>
         {data.stores.map((s) => (
-          <div key={s.store} className="bs-tl-row stage-body" style={{ top: s.ms == null ? '100%' : `${10 + (82 * s.ms) / scale}%`, opacity: s.ms == null ? 0.35 : 1 }}>
+          <div key={s.store} className="bs-tl-row stage-body" style={{ top: `${tops.get(s.store)}%`, opacity: s.ms == null ? 0.35 : 1 }}>
             <span className="bs-tl-t bd-num bs-quiet">{s.ms == null ? '…' : seconds(s.ms)}</span>
             <span className="bs-tl-dot" data-state={s.ms == null ? 'waiting' : 'done'} />
             <AwningMark store={s.store} width={30} /> {storeName(s.store)}
@@ -324,4 +325,17 @@ function buildsOn(g: LearningData['guardrail']): string {
       : `Policy v${g.version} rewrites v${g.parentVersion}'s ${plural(g.parentRules)}, every store`;
   }
   return `Policy v${g.version}: ${plural(g.rules.length)}, every store`;
+}
+
+/** Rows to scale between 10% and 92% of the timeline, but never closer than one label apart: stores that
+ *  land within a few ms of each other (the usual case) are spread evenly instead of drawn over each other. */
+const MIN_GAP = 16;   // percent of the timeline's height, about one row
+export function timelineTops(stores: { store: string; ms: number | null }[], scale: number): Map<string, number> {
+  const TOP = 10, BOTTOM = 92;
+  const order = [...stores].sort((a, b) => (a.ms ?? Infinity) - (b.ms ?? Infinity));
+  const tops = order.map((s) => (s.ms == null ? BOTTOM : TOP + ((BOTTOM - TOP) * s.ms) / scale));
+  for (let i = 1; i < tops.length; i++) tops[i] = Math.max(tops[i], tops[i - 1] + MIN_GAP);
+  const overflow = tops[tops.length - 1] - BOTTOM;
+  if (overflow > 0) for (let i = 0; i < tops.length; i++) tops[i] = Math.max(TOP + i * MIN_GAP, tops[i] - overflow);
+  return new Map(order.map((s, i) => [s.store, Math.min(BOTTOM, tops[i])]));
 }
