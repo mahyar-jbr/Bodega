@@ -1,6 +1,9 @@
 // Startup: settings first, then the app, the change bus and the agent, then listen.
 import './env';
-import { closeDb, pingDb } from '../shared/db';
+import { createAgent } from '../agent';
+import type { ChangeBus } from '../shared/contract';
+import { closeDb, getDb, pingDb } from '../shared/db';
+import { MemoryStore } from '../shared/memory-store';
 import { createApp } from './app';
 
 const port = Number(process.env.PORT) || 3000;
@@ -9,13 +12,13 @@ const app = createApp();
 // ── Change bus ──────────────────────────────────────────────────────────────────────
 // A stand-in that does nothing. The real bus (M2-03) opens one database-level change
 // stream per process and fans events out with on(coll, fn), which returns an unsubscribe.
-const bus = { on: (_coll: string, _fn: (event: unknown) => void) => () => {} };
+const bus: ChangeBus = { on: (_coll, _fn) => () => {} };
 
 // ── Agent (S07) ─────────────────────────────────────────────────────────────────────
-// Once S05 lands, wire the agent here (getDb comes from ../shared/db):
-//   const agent = createAgent({ store, db: getDb(), bus });
-//   await agent.start();
-// `store` is S05's MemoryStore at first, then the AtlasStore.
+// MemoryStore is the stand-in until AtlasStore passes the shared contract tests.
+const store = new MemoryStore();
+const agent = createAgent({ store, db: getDb(), bus });
+await agent.start();
 
 const server = app.listen(port, (error?: Error) => {
   if (error) {
