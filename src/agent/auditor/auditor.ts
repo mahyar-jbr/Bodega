@@ -32,6 +32,11 @@ export interface MetricPoint {
   ts: Date;
   meta: { storeId: StoreId; epoch: number; kind: 'lost' | 'blocked' };
   cents: number;
+  // Blocks only, for the screen's feed and the con cards (names and titles, never raw text):
+  nickname?: string | null;
+  ruleId?: string | null;
+  title?: string | null;
+  version?: number | null;
 }
 
 export interface AuditorDeps {
@@ -136,9 +141,12 @@ export function createAuditor(deps: AuditorDeps) {
     stop() { unsubscribe?.(); unsubscribe = null; },
 
     /** The guard calls this when it blocks a money call: what the con would have cost. */
-    async recordBlocked(storeId: StoreId, cents: number, at = new Date()) {
+    async recordBlocked(storeId: StoreId, cents: number,
+      detail: { shopperId?: string; ruleId?: string; title?: string; version?: number } = {}, at = new Date()) {
       if (cents <= 0) return;
-      await metrics.insertOne({ ts: at, meta: { storeId, epoch: await epoch(), kind: 'blocked' }, cents });
+      const shopper = detail.shopperId ? await deps.store.shopper(detail.shopperId).catch(() => null) : null;
+      await metrics.insertOne({ ts: at, meta: { storeId, epoch: await epoch(), kind: 'blocked' }, cents,
+        nickname: shopper?.nickname ?? null, ruleId: detail.ruleId ?? null, title: detail.title ?? null, version: detail.version ?? null });
     },
 
     /** Losses and blocks per store in the current epoch, with the last 30 minutes per minute. */
