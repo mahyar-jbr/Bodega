@@ -11,7 +11,7 @@
 | Phase | What it achieves | The check | By | Done |
 |---|---|---|---|---|
 | Before the event | The test data, a generic skeleton live on Render, and this plan, tagged `pre-event` | The live app's /api/health is green, and the tag is on GitHub | Fri Nov 13 | Done |
-| M1 | A real purchase through chat on a phone | M1-09, on the deployed app | 12:40 | 4 of 12 |
+| M1 | A real purchase through chat on a phone | M1-09, on the deployed app | 12:40 | 5 of 12 |
 | M2 | v0 gets conned, incidents and cons land in Atlas under the memory rules, and a version rolls out to every store and back | M2-09 | 14:20 | 2 of 13 |
 | M3 | The stores learn: a version is proven on the held-out set, goes live everywhere, and Roll back takes it back | M3-10, on the deployed app | 15:25 | 2 of 11 |
 | M4 | The 3-minute demo works end to end, driven only by us, and is recorded | M4-10 | 16:00 | 0 of 6 |
@@ -42,7 +42,7 @@ Hacking starts at 10:45 (nothing for Bodega is coded before). The contract lands
 | M1-07 | Contract tests on AtlasStore | src/store/atlas-store.test.ts runs the shared suite, and it passes | Kasra A | 12:15 | Not started |
 | M1-03 | handleMessage | Chat runs with safety limits, append-only conversations in Atlas, and the guard's hook at the money step (pass, cap or block) | Mahyar | 12:25 | Done |
 | M1-09 | **M1 check** | A real purchase through chat on a phone, on the deployed app with AtlasStore | both | 12:40 | Not started |
-| M1-04 | `npm run try` | It replays dev cases with their transcripts and lists the dev scams that con v0 every time; the demo's lines are picked from that list by 15:30 | helper | 13:00 | In progress |
+| M1-04 | `npm run try` | It replays dev cases with their transcripts and lists the dev scams that con v0 every time; the demo's lines are picked from that list by 15:30 | helper | 13:00 | Done |
 
 ## M2 by 14:20: v0 gets conned, and a version rolls out and back
 
@@ -73,7 +73,7 @@ A version learned from the cons is proven on 120 held-out cases with the same mo
 | M3-01 | Eval runner | It scores the dev and held-out sets on fresh in-memory stores, per category, with live progress, using M2-01's facts | Mahyar | 12:10 | Done |
 | M3-02 | Seal test | A test fails if any file except gate/heldout.ts names heldout.jsonl | helper | 12:30 | Done |
 | M3-03 | v0 baseline | v0's held-out baseline is measured twice, and again after any tuning | Mahyar | 13:35 | Not started |
-| M3-04 | v0 checked and frozen | v0 lets 30% to 50% of held-out scams through and serves at least 95% of honest cases (tuned on dev only), and the shopkeeper's settings (model, effort, tools, full prompt) are frozen into one hash. Nobody else edits the shopkeeper's files until then | Mahyar | 14:05 | Not started |
+| M3-04 | v0 checked and frozen | v0 lets 30% to 50% of held-out scams through and serves at least 95% of honest cases (tuned on dev only), and the shopkeeper's settings (model, effort, tools, full prompt) are frozen into one hash. Nobody else edits the shopkeeper's files until then | Mahyar | 14:05 | In progress |
 | M3-07 | `npm run compare` | It prints v0 against the newest version, per category, with matching settings hashes | Mahyar | 14:15 | In progress |
 | M3-08 | Reset | It deletes shoppers, orders, ledger and bot runs, restocks the shelves, keeps codes, members and stores, and calls agent.reset() | Kasra A | 14:15 | Not started |
 | M3-09 | Ops console | Reset, learning, evaluations and bots work behind the password, with agent.state() on show and three buttons: Opening, Test a strict version and Roll back | Kasra B | 14:30 | Not started |
