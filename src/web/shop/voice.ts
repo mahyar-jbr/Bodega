@@ -10,6 +10,8 @@ export interface VoiceReply {
 }
 
 export const MAX_RECORDING_MS = 30_000;
+export const MIN_RECORDING_MS = 700;
+const MIN_AUDIO_BYTES = 2_048;
 const MAX_AUDIO_BYTES = 3_500_000; // Leave room for multipart framing under the server's 4 MB limit.
 
 export function canRecordVoice(): boolean {
@@ -29,6 +31,7 @@ export async function voiceAvailable(signal: AbortSignal): Promise<boolean> {
 
 export function friendlyVoiceError(error: unknown): string {
   if (error instanceof ApiError) {
+    if (error.status === 422 && error.code === 'bad_audio') return "Sorry, I didn't catch that. Hold the button while you talk.";
     if (error.code === 'voice_off') return 'Voice is unavailable right now. You can still type below.';
     if (error.code === 'no_speech') return 'Didn’t catch that. Try speaking again, or type below.';
     if (error.status === 429) return 'Slow down a little and try that again.';
@@ -76,6 +79,7 @@ export function createVoiceRecorder(options: {
   let stream: MediaStream | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let request: AbortController | null = null;
+  let stopRecording: (() => void) | null = null;
 
   function setPhase(next: VoicePhase) { phase = next; options.onPhase(next); }
   function releaseTracks() {
@@ -89,6 +93,7 @@ export function createVoiceRecorder(options: {
     request = null;
     if (recorder?.state === 'recording') recorder.stop();
     recorder = null;
+    stopRecording = null;
     releaseTracks();
     setPhase('idle');
   }
@@ -98,7 +103,7 @@ export function createVoiceRecorder(options: {
     request = new AbortController();
     try {
       const form = new FormData();
-      form.append('audio', blob, blob.type.includes('mp4') ? 'voice.mp4' : 'voice.webm');
+      form.append('audio', blob, blob.type.includes('mp4') ? 'voice.m4a' : 'voice.webm');
       form.append('shopperId', options.shopperId);
       form.append('storeId', options.storeId);
       // Let fetch set the multipart boundary; apiJson's default JSON header is inappropriate here.
@@ -129,14 +134,21 @@ export function createVoiceRecorder(options: {
         const granted = await navigator.mediaDevices.getUserMedia({ audio: true });
         if (token !== generation) { granted.getTracks().forEach((track) => track.stop()); return; }
         stream = granted;
-        const mime = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm']
+        const ios = /iPad|iPhone|iPod/.test(navigator.userAgent)
+          || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+        const mime = (ios ? ['audio/mp4', 'audio/webm;codecs=opus'] : ['audio/webm;codecs=opus', 'audio/mp4'])
           .find((type) => MediaRecorder.isTypeSupported(type));
-        const current = new MediaRecorder(granted, mime ? { mimeType: mime } : undefined);
+        if (!mime) throw new Error('No supported audio recording format');
+        const current = new MediaRecorder(granted, { mimeType: mime });
         recorder = current;
         const chunks: Blob[] = [];
         let size = 0;
+        let stoppedAt: number | null = null;
         current.ondataavailable = ({ data }) => {
-          if (data.size) { chunks.push(data); size += data.size; }
+          if (token !== generation) return;
+          // MP4's first chunk contains the header; every fragment and the final chunk are needed.
+          chunks.push(data);
+          size += data.size;
           if (size > MAX_AUDIO_BYTES && token === generation) {
             cancel();
             options.onError(new ApiError(413, 'recording_too_large', 'Recording too large'));
@@ -146,21 +158,31 @@ export function createVoiceRecorder(options: {
         current.onstop = () => {
           if (token !== generation) return;
           recorder = null;
+          stopRecording = null;
           releaseTracks();
-          const blob = new Blob(chunks, { type: current.mimeType || chunks[0]?.type || 'audio/webm' });
-          if (!blob.size) { setPhase('idle'); options.onError(new ApiError(422, 'no_speech', 'Empty recording')); return; }
+          // MediaRecorder dispatches its final dataavailable before stop. Never upload earlier.
+          const blob = new Blob(chunks, { type: current.mimeType });
+          if ((stoppedAt ?? Date.now()) - startedAt < MIN_RECORDING_MS || blob.size < MIN_AUDIO_BYTES) {
+            setPhase('idle'); options.onError(new ApiError(422, 'bad_audio', 'Recording too short or empty')); return;
+          }
           void upload(blob, token);
         };
-        current.start(1_000);
+        current.start(250);
+        const startedAt = Date.now();
+        stopRecording = () => {
+          if (current.state !== 'recording') return;
+          stoppedAt = Date.now();
+          current.stop();
+        };
         setPhase('recording');
-        timer = setTimeout(() => { if (current.state === 'recording') current.stop(); }, MAX_RECORDING_MS);
+        timer = setTimeout(() => stopRecording?.(), MAX_RECORDING_MS);
       } catch (error) {
         if (token === generation) { cancel(); options.onError(error); }
       }
     },
     stop() {
       if (phase === 'requesting') cancel(); // A release during the permission prompt must not leave the mic running.
-      else if (recorder?.state === 'recording') recorder.stop();
+      else stopRecording?.();
     },
     cancel,
   };

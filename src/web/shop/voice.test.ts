@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../ui/api';
-import { canRecordVoice, createVoiceRecorder, friendlyVoiceError, MAX_RECORDING_MS, parseVoiceReply, voiceAvailable } from './voice';
+import { canRecordVoice, createVoiceRecorder, friendlyVoiceError, MAX_RECORDING_MS, MIN_RECORDING_MS, parseVoiceReply, voiceAvailable } from './voice';
 
 const payload = {
   transcript: 'One coffee please',
@@ -20,25 +20,28 @@ class FakeRecorder {
   ondataavailable: ((event: { data: Blob }) => void) | null = null;
   onstop: (() => void) | null = null;
   onerror: (() => void) | null = null;
-  data = new Blob(['recorded speech'], { type: 'audio/webm;codecs=opus' });
+  data = new Blob(['recorded speech'.padEnd(2_500, ' ')], { type: 'audio/webm;codecs=opus' });
+  autoStopEvents = true;
+  timeslice: number | undefined;
   constructor(_stream: MediaStream, options?: MediaRecorderOptions) {
     this.mimeType = options?.mimeType ?? 'audio/webm';
     recordings.push(this);
   }
-  start() { this.state = 'recording'; }
+  start(timeslice?: number) { this.timeslice = timeslice; this.state = 'recording'; }
   stop() {
     this.state = 'inactive';
-    queueMicrotask(() => { this.ondataavailable?.({ data: this.data }); this.onstop?.(); });
+    if (this.autoStopEvents) queueMicrotask(() => { this.ondataavailable?.({ data: this.data }); this.onstop?.(); });
   }
 }
 
 beforeEach(() => {
+  vi.useFakeTimers();
   recordings = [];
   track.stop.mockClear();
   FakeRecorder.isTypeSupported.mockImplementation((type) => type === 'audio/webm;codecs=opus');
   getUserMedia = vi.fn(async () => stream);
   fetchMock = vi.fn(async () => new Response(JSON.stringify(payload)));
-  vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
+  vi.stubGlobal('navigator', { userAgent: 'Desktop Chrome', maxTouchPoints: 0, mediaDevices: { getUserMedia } });
   vi.stubGlobal('MediaRecorder', FakeRecorder);
   vi.stubGlobal('fetch', fetchMock);
 });
@@ -49,6 +52,7 @@ function fixture() {
   return { ...callbacks, recorder: createVoiceRecorder({ shopperId: 'shopper-q2', storeId: 'queen', ...callbacks }) };
 }
 const flush = async () => { for (let index = 0; index < 15; index++) await Promise.resolve(); };
+const hold = () => vi.advanceTimersByTimeAsync(MIN_RECORDING_MS + 50);
 
 describe('voice recording', () => {
   it('requests the mic only on start, uploads multipart after final data, and preserves the full ChatReply', async () => {
@@ -56,7 +60,9 @@ describe('voice recording', () => {
     expect(getUserMedia).not.toHaveBeenCalled();
     await f.recorder.start();
     expect(f.recorder.phase).toBe('recording');
+    expect(recordings[0].timeslice).toBe(250);
     expect(fetchMock).not.toHaveBeenCalled();
+    await hold();
     f.recorder.stop();
     await flush();
     const [path, request] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
@@ -66,7 +72,7 @@ describe('voice recording', () => {
     expect(form.get('shopperId')).toBe('shopper-q2');
     expect(form.get('storeId')).toBe('queen');
     expect((form.get('audio') as File).name).toBe('voice.webm');
-    expect(await (form.get('audio') as File).text()).toBe('recorded speech');
+    expect(await (form.get('audio') as File).text()).toBe(await recordings[0].data.text());
     expect(f.onReply).toHaveBeenCalledWith(expect.objectContaining({ transcript: payload.transcript, reply: payload.reply }));
     expect(f.onPhase.mock.calls.map(([phase]) => phase)).toEqual(['requesting', 'recording', 'sending', 'idle']);
     expect(track.stop).toHaveBeenCalledOnce();
@@ -77,10 +83,11 @@ describe('voice recording', () => {
     const f = fixture();
     await f.recorder.start();
     expect(recordings[0].mimeType).toBe('audio/mp4');
+    await hold();
     f.recorder.stop();
     await flush();
     const form = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as FormData;
-    expect((form.get('audio') as File).name).toBe('voice.mp4');
+    expect((form.get('audio') as File).name).toBe('voice.m4a');
     expect((form.get('audio') as File).type).toBe('audio/mp4');
   });
 
@@ -125,13 +132,14 @@ describe('voice recording', () => {
     f.recorder.stop();
     await flush();
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(f.onError).toHaveBeenCalledWith(expect.objectContaining({ code: 'no_speech' }));
+    expect(f.onError).toHaveBeenCalledWith(expect.objectContaining({ code: 'bad_audio' }));
   });
 
   it('hides voice after 501 and preserves a useful error', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'voice_off' }), { status: 501 }));
     const f = fixture();
     await f.recorder.start();
+    await hold();
     f.recorder.stop();
     await flush();
     expect(f.onUnavailable).toHaveBeenCalledOnce();
@@ -143,6 +151,7 @@ describe('voice recording', () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: 'too_long', transcript: 'A spoken message' }), { status: 400 }));
     const f = fixture();
     await f.recorder.start();
+    await hold();
     f.recorder.stop();
     await flush();
     expect(f.onError).toHaveBeenCalledWith(expect.objectContaining({ code: 'too_long' }), 'A spoken message');
@@ -154,6 +163,7 @@ describe('voice recording', () => {
     fetchMock.mockImplementation(() => new Promise((resolve) => { respond = resolve; }));
     const f = fixture();
     await f.recorder.start();
+    await hold();
     f.recorder.stop();
     await flush();
     const request = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
@@ -171,6 +181,64 @@ describe('voice recording', () => {
     await f.recorder.start();
     expect(f.onError).toHaveBeenCalledWith(expect.objectContaining({ name: 'NotAllowedError' }));
     expect(f.recorder.phase).toBe('idle');
+    await f.recorder.start();
+    expect(f.recorder.phase).toBe('recording');
+    f.recorder.cancel();
+  });
+
+  it('keeps the MP4 header and all fragments and uploads only after the stop event', async () => {
+    vi.stubGlobal('navigator', { userAgent: 'iPhone', maxTouchPoints: 5, mediaDevices: { getUserMedia } });
+    FakeRecorder.isTypeSupported.mockReturnValue(true);
+    const f = fixture();
+    await f.recorder.start();
+    const recording = recordings[0];
+    expect(recording.mimeType).toBe('audio/mp4');
+    recording.autoStopEvents = false;
+    const header = 'ftyp-header'.padEnd(728, 'h');
+    const fragment = 'moof-mdat'.padEnd(3_000, 'a');
+    const final = 'final-mdat'.padEnd(1_000, 'z');
+    recording.ondataavailable?.({ data: new Blob([header], { type: 'audio/mp4' }) });
+    recording.ondataavailable?.({ data: new Blob([fragment], { type: 'audio/mp4' }) });
+    await hold();
+    expect(fetchMock).not.toHaveBeenCalled();
+    f.recorder.stop();
+    await flush();
+    expect(fetchMock).not.toHaveBeenCalled();
+    recording.ondataavailable?.({ data: new Blob([final], { type: 'audio/mp4' }) });
+    expect(fetchMock).not.toHaveBeenCalled();
+    recording.onstop?.();
+    await flush();
+    const form = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as FormData;
+    const file = form.get('audio') as File;
+    expect(file.type).toBe('audio/mp4');
+    expect(file.name).toBe('voice.m4a');
+    expect(await file.text()).toBe(header + fragment + final);
+  });
+
+  it.each(['missing', 'empty', 'header-only', 'short'] as const)('does not upload a %s recording', async (kind) => {
+    const f = fixture();
+    await f.recorder.start();
+    const recording = recordings[0];
+    if (kind === 'missing') recording.autoStopEvents = false;
+    if (kind === 'empty') recording.data = new Blob();
+    if (kind === 'header-only') recording.data = new Blob(['h'.repeat(728)]);
+    await vi.advanceTimersByTimeAsync(kind === 'short' ? MIN_RECORDING_MS - 1 : MIN_RECORDING_MS);
+    f.recorder.stop();
+    if (kind === 'missing') recording.onstop?.();
+    await flush();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(f.onError).toHaveBeenCalledWith(expect.objectContaining({ code: 'bad_audio' }));
+    expect(track.stop).toHaveBeenCalledOnce();
+    expect(f.recorder.phase).toBe('idle');
+  });
+
+  it('maps server bad_audio to the requested retry message and allows another recording', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'bad_audio' }), { status: 422 }));
+    const f = fixture();
+    await f.recorder.start(); await hold(); f.recorder.stop(); await flush();
+    const error = f.onError.mock.calls[0][0];
+    expect(friendlyVoiceError(error)).toBe("Sorry, I didn't catch that. Hold the button while you talk.");
+    expect(f.onReply).not.toHaveBeenCalled();
     await f.recorder.start();
     expect(f.recorder.phase).toBe('recording');
     f.recorder.cancel();
