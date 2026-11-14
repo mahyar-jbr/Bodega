@@ -47,6 +47,7 @@ export interface AuditorDeps {
 }
 
 export type AgentMetrics = { storeId: StoreId; lostCents: number; blockedCents: number;
+  lostCount: number; blockedCount: number;          // beyond the contract: cons that worked, cons blocked (the screen's tiles)
   perMinute: { minute: Date; lostCents: number; blockedCents: number }[] }[];
 
 const STORES: StoreId[] = ['queen', 'yonge', 'scarborough'];
@@ -145,9 +146,9 @@ export function createAuditor(deps: AuditorDeps) {
       const current = await epoch();
       const since = new Date(Date.now() - PER_MINUTE_WINDOW_MS);
       const [totals, minutes] = await Promise.all([
-        metrics.aggregate<{ _id: { storeId: StoreId; kind: string }; cents: number }>([
+        metrics.aggregate<{ _id: { storeId: StoreId; kind: string }; cents: number; count: number }>([
           { $match: { 'meta.epoch': current } },
-          { $group: { _id: { storeId: '$meta.storeId', kind: '$meta.kind' }, cents: { $sum: '$cents' } } },
+          { $group: { _id: { storeId: '$meta.storeId', kind: '$meta.kind' }, cents: { $sum: '$cents' }, count: { $sum: 1 } } },
         ]).toArray(),
         metrics.aggregate<{ _id: { storeId: StoreId; kind: string; minute: Date }; cents: number }>([
           { $match: { 'meta.epoch': current, ts: { $gte: since } } },
@@ -156,7 +157,8 @@ export function createAuditor(deps: AuditorDeps) {
         ]).toArray(),
       ]);
       return STORES.map((storeId) => {
-        const total = (kind: string) => totals.find((t) => t._id.storeId === storeId && t._id.kind === kind)?.cents ?? 0;
+        const row = (kind: string) => totals.find((t) => t._id.storeId === storeId && t._id.kind === kind);
+        const total = (kind: string) => row(kind)?.cents ?? 0;
         const byMinute = new Map<number, { minute: Date; lostCents: number; blockedCents: number }>();
         for (const m of minutes.filter((m) => m._id.storeId === storeId)) {
           const key = m._id.minute.getTime();
@@ -164,7 +166,8 @@ export function createAuditor(deps: AuditorDeps) {
           if (m._id.kind === 'lost') row.lostCents += m.cents; else row.blockedCents += m.cents;
           byMinute.set(key, row);
         }
-        return { storeId, lostCents: total('lost'), blockedCents: total('blocked'), perMinute: [...byMinute.values()] };
+        return { storeId, lostCents: total('lost'), blockedCents: total('blocked'),
+          lostCount: row('lost')?.count ?? 0, blockedCount: row('blocked')?.count ?? 0, perMinute: [...byMinute.values()] };
       });
     },
   };
