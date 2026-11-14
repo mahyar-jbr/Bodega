@@ -118,7 +118,7 @@ Frozen at 16:15, submitted by 16:50 (the deadline is 17:00), and rehearsed by 17
 | X2 | A voice hotline with ElevenLabs (it needs an ElevenLabs key) | Mahyar | Not started |
 | X3 | Atlas agent memory for regular customers | Mahyar | Not started |
 | X4 | An audit-trail panel for one con: its summary, ledger entries, incident and the version that blocks it | Mahyar | Done |
-| M4-05 | Flash sale: the limited hoodie is restocked to 10, then 100 bot buyers race for it; exactly 10 sell, and every wallet matches its ledger | Kasra A | Not started |
+| M4-05 | Flash sale: the limited hoodie is restocked to 10, then 100 bot buyers race for it; exactly 10 sell, and every wallet matches its ledger | Kasra A | In progress |
 | M4-09 | The flash sale's result on the big screen | Mahyar | Not started |
 
 ## If we fall behind
