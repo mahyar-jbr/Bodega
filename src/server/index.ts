@@ -18,7 +18,7 @@ await bus.start();
 const store = new AtlasStore(db);
 const agent = createAgent({ store, db, bus });
 await agent.start();
-const app = createApp({ realtime: { agent, bus } });
+const app = createApp({ api: { store, agent, db }, realtime: { bus } });
 
 const server = app.listen(port, (error?: Error) => {
   if (error) {
