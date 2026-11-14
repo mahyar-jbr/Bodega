@@ -12,8 +12,8 @@
 |---|---|---|---|---|
 | Before the event | The test data, a generic skeleton live on Render, and this plan, tagged `pre-event` | The live app's /api/health is green, and the tag is on GitHub | Fri Nov 13 | Done |
 | M1 | A real purchase through chat on a phone | M1-09, on the deployed app | 12:40 | Done |
-| M2 | v0 gets conned, incidents and cons land in Atlas under the memory rules, and a version rolls out to every store and back | M2-09 | 14:20 | 11 of 13 |
-| M3 | The stores learn: a version is proven on the held-out set, goes live everywhere, and Roll back takes it back | M3-10, on the deployed app | 15:25 | 9 of 11 |
+| M2 | v0 gets conned, incidents and cons land in Atlas under the memory rules, and a version rolls out to every store and back | M2-09 | 14:20 | Done |
+| M3 | The stores learn: a version is proven on the held-out set, goes live everywhere, and Roll back takes it back | M3-10, on the deployed app | 15:25 | Done |
 | M4 | The 3-minute demo works end to end, driven only by us, and is recorded | M4-10 | 16:00 | 1 of 6 |
 | Submit | Frozen, submitted and rehearsed | F06, submitted | 16:50 | 0 of 8 |
 
@@ -51,7 +51,7 @@ The store runtimes, rollback and reset come right after the guard, so the never-
 | ID | Task | Done when | Owner | By | State |
 |---|---|---|---|---|---|
 | M2-01 | Facts and valid basis | Tests built from data/README.md's rules pass. A refund on an order from the same conversation counts as a discount, and needs a valid discount basis unless it cancels the whole order | Mahyar | 11:35 | Done |
-| M2-07 | Big screen v1 | It shows the stores, money lost and a live feed of incidents and cons, from /api/agent/state and then SSE | Mahyar | 12:50 | In progress |
+| M2-07 | Big screen v1 | It shows the stores, money lost and a live feed of incidents and cons, from /api/agent/state and then SSE | Mahyar | 12:50 | Done |
 | M2-03 | Change bus | One change stream delivers every change, and it survives a reconnect | Kasra A | 12:55 | Done |
 | M2-02 | Guard | Every money call is checked against the store's version (no rules at v0). A failed discount rule caps the discount at the valid percentage; other failed rules block | Mahyar | 13:00 | Done |
 | M2-05 | Auditor | Each loss with no valid basis becomes an incident with a Haiku summary and an attack metric, and agent.metrics() reports them | Mahyar | 13:15 | Done |
@@ -62,7 +62,7 @@ The store runtimes, rollback and reset come right after the guard, so the never-
 | M2-08 | Crowd bot and opening | It replays dev cases at one store with rate caps and can be started with curl; its opening sends three dev scams at once (POST /api/ops/opening) | Mahyar | 14:00 | Done |
 | M2-06 | Con memory | Incidents group into cons in Atlas Agent Memory (one namespace per violation and epoch), with where each was first seen; on errors or slowness it groups by violation | Mahyar | 14:05 | Done |
 | M2-10 | Memory rules | A TTL index expires raw conversations 24 hours after the last message, and validators on incidents and cons reject raw-text fields | Mahyar | 14:10 | Done |
-| M2-09 | **M2 check** | The crowd bot cons v0 at Queen St; incidents and cons show in Atlas, under the memory rules, and on the screen; a hand-written version rolls out to every store and back | both | 14:20 | Not started |
+| M2-09 | **M2 check** | The crowd bot cons v0 at Queen St; incidents and cons show in Atlas, under the memory rules, and on the screen; a hand-written version rolls out to every store and back | both | 14:20 | Done |
 
 ## M3 by 15:25: the stores learn, and forget
 
@@ -76,11 +76,11 @@ A version learned from the cons is proven on 120 held-out cases with the same mo
 | M3-04 | v0 checked and frozen | v0 lets 30% to 50% of held-out scams through and serves at least 95% of honest cases (tuned on dev only), and the shopkeeper's settings (model, effort, tools, full prompt) are frozen into one hash. Nobody else edits the shopkeeper's files until then | Mahyar | 14:05 | Done |
 | M3-07 | `npm run compare` | It prints v0 against the newest version, per category, with matching settings hashes | Mahyar | 14:15 | Done |
 | M3-08 | Reset | It deletes shoppers, orders, ledger and bot runs, restocks the shelves, keeps codes, members and stores, and calls agent.reset() | Kasra A | 14:15 | Done |
-| M3-09 | Ops console | Reset, learning, evaluations and bots work behind the password, with agent.state() on show and three buttons: Opening, Test a strict version and Roll back | Kasra B | 14:30 | In progress |
+| M3-09 | Ops console | Reset, learning, evaluations and bots work behind the password, with agent.state() on show and three buttons: Opening, Test a strict version and Roll back | Kasra B | 14:30 | Done |
 | M3-05 | Learner | Uncovered cons become a validated, rules-only candidate. Learning starts 10 seconds after the first new con, pauses after a rollback, and Learn now forces a cycle | Mahyar | 14:45 | Done |
 | M3-06 | Gate and promotion | A candidate is scored on the held-out set, then promoted in one transaction or rejected with reasons, with one retry | Mahyar | 15:05 | Done |
 | M3-11 | Gate demo | agent.gateDemo() sends a deliberately too-strict test version through the gate, and the screen shows the rejection. About $3 a press: once, at the recorded run | Mahyar | 15:10 | Done |
-| M3-10 | **M3 check** | On the deployed app, the crowd bot's cons trigger learn, gate and promote; every store turns immune; then Roll back, and every store forgets | Mahyar | 15:25 | In progress |
+| M3-10 | **M3 check** | On the deployed app, the crowd bot's cons trigger learn, gate and promote; every store turns immune; then Roll back, and every store forgets | Mahyar | 15:25 | Done |
 
 ## M4 by 16:00: the demo, recorded
 
