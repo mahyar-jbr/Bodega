@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { StoreId } from '../../shared/contract';
 import { canRecordVoice, createVoiceRecorder, voiceAvailable, type VoicePhase, type VoiceRecorder, type VoiceReply } from './voice';
+import { createLiveTranscript } from './live-transcript';
+import type { VoiceDraft } from './VoiceTranscriptBubble';
 
 interface Props {
   shopperId: string;
@@ -9,12 +11,15 @@ interface Props {
   onPhase: (phase: VoicePhase) => void;
   onReply: (reply: VoiceReply) => void;
   onError: (error: unknown, transcript?: string) => void;
+  onPreview: (draft: VoiceDraft | null) => void;
 }
 
 export function VoiceButton(props: Props) {
   const [available, setAvailable] = useState(false);
   const [phase, setPhase] = useState<VoicePhase>('idle');
   const [replay, setReplay] = useState(false);
+  const liveText = useRef<string | null>(null);
+  const released = useRef(false);
   const latest = useRef(props);
   latest.current = props;
   const recorder = useRef<VoiceRecorder | null>(null);
@@ -39,10 +44,19 @@ export function VoiceButton(props: Props) {
     void voiceAvailable(probe.signal).then((value) => { if (current) setAvailable(value); });
     const control = createVoiceRecorder({
       shopperId: props.shopperId, storeId: props.storeId,
-      onPhase: (next) => { if (current) { setPhase(next); latest.current.onPhase(next); } },
-      onReply: (reply) => { if (current) { latest.current.onReply(reply); playReply(reply); } },
-      onError: (error, transcript) => { if (current) latest.current.onError(error, transcript); },
+      onPhase: (next) => { if (current) {
+        setPhase(next); latest.current.onPhase(next);
+        if (next === 'idle' || next === 'requesting') { liveText.current = null; released.current = false; latest.current.onPreview(null); }
+        if (next === 'recording') latest.current.onPreview({ text: liveText.current, released: false });
+      } },
+      onRelease: () => { if (current) { released.current = true; latest.current.onPreview({ text: liveText.current, released: true }); } },
+      onReply: (reply) => { if (current) { latest.current.onPreview(null); latest.current.onReply(reply); playReply(reply); } },
+      onError: (error, transcript) => { if (current) { latest.current.onPreview(null); latest.current.onError(error, transcript); } },
       onUnavailable: () => { if (current) setAvailable(false); },
+      createLivePreview: () => createLiveTranscript({ shopperId: props.shopperId, onText: (text) => { if (current) {
+        liveText.current = text;
+        if (control.phase === 'recording' || released.current) latest.current.onPreview({ text, released: released.current });
+      } } }),
     });
     recorder.current = control;
     const onHidden = () => {

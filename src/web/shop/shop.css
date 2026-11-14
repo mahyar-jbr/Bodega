@@ -535,6 +535,13 @@
   background: transparent;
   font-weight: 600;
 }
+.shop-voice-status { max-width: calc(100% - 32px); border-radius: var(--radius-md); }
+.shop-voice-status button { flex-shrink: 0; }
+.shop-listening-cue { display: flex; align-items: center; justify-content: flex-end; gap: 5px; margin-top: 7px; color: var(--ink-3); font-size: var(--ui-micro-font-size); }
+.shop-listening-cue i { width: 6px; height: 6px; border-radius: 50%; background: var(--brand); animation: shop-typing var(--dur-loop) ease-in-out infinite; }
+.shop-voice-wave { display: inline-block; margin-left: 10px; vertical-align: middle; color: var(--ink-3); }
+.is-live-voice .shop-message-content { overflow-wrap: anywhere; }
+.shop-message.is-quiet { animation: none; }
 .shop-visually-hidden {
   position: absolute;
   width: 1px;

@@ -8,6 +8,11 @@ export interface VoiceReply {
   audio: string | null;
   audioType: string | null;
 }
+export interface VoicePreview {
+  attachStream(stream: MediaStream): void;
+  finish(): void;
+  cancel(): void;
+}
 
 export const MAX_RECORDING_MS = 30_000;
 export const MIN_RECORDING_MS = 700;
@@ -72,6 +77,8 @@ export function createVoiceRecorder(options: {
   onReply: (reply: VoiceReply) => void;
   onError: (error: unknown, transcript?: string) => void;
   onUnavailable: () => void;
+  onRelease?: () => void;
+  createLivePreview?: () => VoicePreview | null;
 }) {
   let phase: VoicePhase = 'idle';
   let generation = 0;
@@ -80,6 +87,13 @@ export function createVoiceRecorder(options: {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let request: AbortController | null = null;
   let stopRecording: (() => void) | null = null;
+  let preview: VoicePreview | null = null;
+
+  function endPreview(cancel: boolean) {
+    const current = preview;
+    if (cancel) preview = null;
+    try { if (cancel) current?.cancel(); else current?.finish(); } catch { /* Preview is optional. */ }
+  }
 
   function setPhase(next: VoicePhase) { phase = next; options.onPhase(next); }
   function releaseTracks() {
@@ -91,6 +105,7 @@ export function createVoiceRecorder(options: {
     generation++;
     request?.abort();
     request = null;
+    endPreview(true);
     if (recorder?.state === 'recording') recorder.stop();
     recorder = null;
     stopRecording = null;
@@ -120,7 +135,7 @@ export function createVoiceRecorder(options: {
     } catch (error) {
       if (token === generation) options.onError(error);
     } finally {
-      if (token === generation) { request = null; setPhase('idle'); }
+      if (token === generation) { request = null; endPreview(true); setPhase('idle'); }
     }
   }
 
@@ -130,6 +145,7 @@ export function createVoiceRecorder(options: {
       if (phase !== 'idle') return;
       const token = ++generation;
       setPhase('requesting');
+      try { preview = options.createLivePreview?.() ?? null; } catch { preview = null; }
       try {
         const granted = await navigator.mediaDevices.getUserMedia({ audio: true });
         if (token !== generation) { granted.getTracks().forEach((track) => track.stop()); return; }
@@ -144,6 +160,8 @@ export function createVoiceRecorder(options: {
         const chunks: Blob[] = [];
         let size = 0;
         let stoppedAt: number | null = null;
+        let released = false;
+        const notifyRelease = () => { if (!released) { released = true; options.onRelease?.(); } };
         current.ondataavailable = ({ data }) => {
           if (token !== generation) return;
           // MP4's first chunk contains the header; every fragment and the final chunk are needed.
@@ -157,12 +175,15 @@ export function createVoiceRecorder(options: {
         current.onerror = () => { if (token === generation) { cancel(); options.onError(new Error('Recording failed')); } };
         current.onstop = () => {
           if (token !== generation) return;
+          notifyRelease();
           recorder = null;
           stopRecording = null;
+          endPreview(false);
           releaseTracks();
           // MediaRecorder dispatches its final dataavailable before stop. Never upload earlier.
           const blob = new Blob(chunks, { type: current.mimeType });
           if ((stoppedAt ?? Date.now()) - startedAt < MIN_RECORDING_MS || blob.size < MIN_AUDIO_BYTES) {
+            endPreview(true);
             setPhase('idle'); options.onError(new ApiError(422, 'bad_audio', 'Recording too short or empty')); return;
           }
           void upload(blob, token);
@@ -172,9 +193,12 @@ export function createVoiceRecorder(options: {
         stopRecording = () => {
           if (current.state !== 'recording') return;
           stoppedAt = Date.now();
+          notifyRelease();
+          endPreview(false);
           current.stop();
         };
         setPhase('recording');
+        try { preview?.attachStream(granted); } catch { endPreview(true); }
         timer = setTimeout(() => stopRecording?.(), MAX_RECORDING_MS);
       } catch (error) {
         if (token === generation) { cancel(); options.onError(error); }

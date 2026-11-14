@@ -243,6 +243,52 @@ describe('voice recording', () => {
     expect(f.recorder.phase).toBe('recording');
     f.recorder.cancel();
   });
+
+  it('keeps the complete recording upload working if optional live audio fails', async () => {
+    const callbacks = { onPhase: vi.fn(), onReply: vi.fn(), onError: vi.fn(), onUnavailable: vi.fn() };
+    const preview = { attachStream: vi.fn(() => { throw new Error('Web Audio unavailable'); }), finish: vi.fn(), cancel: vi.fn() };
+    const recorder = createVoiceRecorder({ shopperId: 'q1', storeId: 'queen', ...callbacks, createLivePreview: () => preview });
+    await recorder.start();
+    expect(preview.cancel).toHaveBeenCalledOnce();
+    expect(recorder.phase).toBe('recording');
+    await hold(); recorder.stop(); await flush();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const form = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as FormData;
+    expect([...form.keys()]).toEqual(['audio', 'shopperId', 'storeId']);
+    expect(callbacks.onReply).toHaveBeenCalledOnce();
+    expect(callbacks.onError).not.toHaveBeenCalled();
+  });
+
+  it('finishes live preview on release, then clears it when the final transcript replaces it', async () => {
+    const callbacks = { onPhase: vi.fn(), onReply: vi.fn(), onError: vi.fn(), onUnavailable: vi.fn() };
+    const preview = { attachStream: vi.fn(), finish: vi.fn(), cancel: vi.fn() };
+    const createLivePreview = vi.fn(() => preview);
+    const recorder = createVoiceRecorder({ shopperId: 'q1', storeId: 'queen', ...callbacks, createLivePreview });
+    await recorder.start();
+    expect(createLivePreview).toHaveBeenCalledOnce();
+    expect(preview.attachStream).toHaveBeenCalledWith(stream);
+    await hold(); recorder.stop();
+    expect(preview.finish).toHaveBeenCalled();
+    await flush();
+    expect(callbacks.onReply).toHaveBeenCalledWith(expect.objectContaining({ transcript: payload.transcript }));
+    expect(preview.cancel).toHaveBeenCalledOnce();
+    expect(track.stop).toHaveBeenCalledOnce();
+  });
+
+  it('notifies release immediately, before final recorder data and upload are available', async () => {
+    const onRelease = vi.fn();
+    const recorder = createVoiceRecorder({ shopperId: 'q1', storeId: 'queen', onRelease,
+      onPhase: vi.fn(), onReply: vi.fn(), onError: vi.fn(), onUnavailable: vi.fn() });
+    await recorder.start(); await hold();
+    recordings[0].autoStopEvents = false;
+    recorder.stop();
+    expect(onRelease).toHaveBeenCalledOnce();
+    expect(fetchMock).not.toHaveBeenCalled();
+    recordings[0].ondataavailable?.({ data: recordings[0].data });
+    recordings[0].onstop?.(); await flush();
+    expect(onRelease).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
 });
 
 describe('voice availability and replies', () => {

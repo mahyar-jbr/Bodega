@@ -9,6 +9,7 @@ import { isStoreKey, STORES, type StoreKey } from '../ui/stores';
 import { ensureShopper, readTranscript, saveLocalShopper, saveTranscript, type LocalShopper } from './session';
 import { displayReply, policyLabel, policySnapshot, type PolicyState } from './presentation';
 import { VoiceButton } from './VoiceButton';
+import { VoiceTranscriptBubble, type VoiceDraft } from './VoiceTranscriptBubble';
 import { friendlyVoiceError, type VoicePhase } from './voice';
 import '../ui/theme.css';
 import './shop.css';
@@ -28,6 +29,7 @@ type Message = {
   blocked?: ChatReply['blocked'];
   policyVersion?: number;
   error?: boolean;
+  quiet?: boolean;
 };
 
 function parseChatReply(value: unknown): ChatReply {
@@ -99,6 +101,7 @@ export default function ShopPage() {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [voicePhase, setVoicePhase] = useState<VoicePhase>('idle');
+  const [voicePreview, setVoicePreview] = useState<VoiceDraft | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const policyRef = useRef<PolicyState | null>(null);
 
@@ -111,6 +114,7 @@ export default function ShopPage() {
     setMessages([]);
     setDraft('');
     setVoicePhase('idle');
+    setVoicePreview(null);
     setLoadError(false);
     ensureShopper(store, slot).then((next) => {
       if (!current) return;
@@ -190,7 +194,7 @@ export default function ShopPage() {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages, sending, voicePhase]);
+  }, [messages, sending, voicePhase, voicePreview?.text, voicePreview?.released]);
 
   if (!store) return <MissingStore />;
 
@@ -232,7 +236,7 @@ export default function ShopPage() {
       return next;
     });
     setMessages((current) => [...current,
-      ...(transcript ? [{ id: makeId(), from: 'customer' as const, text: transcript, time: currentTime() }] : []),
+      ...(transcript ? [{ id: makeId(), from: 'customer' as const, text: transcript, time: currentTime(), quiet: true }] : []),
       { id: makeId(), from: 'shopkeeper', text: reply.reply, actions: reply.actions,
         blocked: reply.blocked, policyVersion: policy.version, time: currentTime() },
     ]);
@@ -240,7 +244,7 @@ export default function ShopPage() {
 
   function voiceError(error: unknown, transcript?: string) {
     setMessages((current) => [...current,
-      ...(transcript ? [{ id: makeId(), from: 'customer' as const, text: transcript, time: currentTime() }] : []),
+      ...(transcript ? [{ id: makeId(), from: 'customer' as const, text: transcript, time: currentTime(), quiet: true }] : []),
       { id: makeId(), from: 'system', text: friendlyVoiceError(error), time: currentTime(), error: true },
     ]);
   }
@@ -297,6 +301,7 @@ export default function ShopPage() {
           <section className="shop-chat" aria-label={`Chat with the ${design.name} shopkeeper`} aria-live="polite">
             <div className="shop-chat-spacer" />
             {messages.map((message) => <ChatMessage key={message.id} message={message} store={store} nickname={shopper.nickname} />)}
+            {voicePreview && <VoiceTranscriptBubble draft={voicePreview} />}
             {(sending || voicePhase === 'sending') && <TypingIndicator store={store} />}
             <div ref={chatEndRef} />
           </section>
@@ -321,7 +326,7 @@ export default function ShopPage() {
                 <span className="shop-character-count bd-num">{draft.length}/{MAX_MESSAGE_LENGTH}</span>
               </div>
               <VoiceButton key={shopper.id} shopperId={shopper.id} storeId={store} disabled={sending}
-                onPhase={setVoicePhase} onReply={({ reply, transcript }) => acceptReply(reply, transcript)} onError={voiceError} />
+                onPhase={setVoicePhase} onPreview={setVoicePreview} onReply={({ reply, transcript }) => acceptReply(reply, transcript)} onError={voiceError} />
               <button className="shop-send-button" type="submit" aria-label="Send message" disabled={sending || voicePhase !== 'idle' || !draft.trim()}>
                 <Icon name="arrow-up" size={24} />
               </button>
@@ -407,7 +412,7 @@ function ChatMessage({ message, store, nickname }: { message: Message; store: St
     return <p className={`shop-system-message${message.error ? ' is-error' : ''}`}><Icon name={message.error ? 'alert' : 'shield'} size={16} />{message.text}</p>;
   }
   return (
-    <article className={`shop-message is-${message.from}`}>
+    <article className={`shop-message is-${message.from}${message.quiet ? ' is-quiet' : ''}`}>
       {message.from === 'shopkeeper' && (
         <span className="shop-avatar"><AwningMark store={store} width={30} /></span>
       )}
